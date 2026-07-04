@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Login — VulnLab{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Employee Sign-In</h2>
+  <form method="post" action="{{ url_for('login') }}">
+    <label for="username">Username</label>
+    <input id="username" name="username" autocomplete="username" required>
+
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+    <!-- TODO: remove before prod — legacy role field for migration -->
+    <input type="hidden" name="role" value="user">
+
+    <button type="submit">Sign in</button>
+  </form>
+
+  <div class="hint-box">
+    <strong>Lab objectives</strong>
+    <ul>
+      <li>Intercept the login request (Burp, ZAP, or browser DevTools).</li>
+      <li>Try changing hidden fields or cookies after authentication.</li>
+      <li>Collect secrets from the admin dashboard and submit them on <a href="{{ url_for('check') }}">/check</a>.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- dev: test account guest / guest123 -->
+
+{% endblock %}

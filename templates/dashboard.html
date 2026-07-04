@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — VulnLab{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Internal Dashboard</h2>
+  <p>Signed in as <strong>{{ identity.username }}</strong> (role: <code>{{ identity.role }}</code>)</p>
+
+  {% if identity.role == 'admin' %}
+    <div class="secrets">
+      <p><strong>Admin vault — classified</strong></p>
+      <div class="finding">
+        <span class="check-label">{{ check_tag('admin_password') }}</span>
+        <code>{{ secrets.admin_password }}</code>
+      </div>
+      <div class="finding">
+        <span class="check-label">{{ check_tag('lab_flag') }}</span>
+        <code>{{ secrets.lab_flag }}</code>
+      </div>
+      <div class="finding">
+        <span class="check-label">{{ check_tag('internal_token') }}</span>
+        <code>{{ secrets.internal_token }}</code>
+      </div>
+      <div class="finding">
+        <span class="check-label">{{ check_tag('cookie_role') }}</span>
+        <code>admin</code>
+      </div>
+    </div>
+  {% else %}
+    <p class="hint-box">
+      Standard user access. Elevated privileges required to view sensitive assets.
+      Inspect how your session is stored — the server trusts more than one source of truth.
+    </p>
+  {% endif %}
+
+  <p style="margin-top: 1.25rem">
+    <a class="btn" href="{{ url_for('check') }}">Submit findings on /check</a>
+    <a class="btn" href="{{ url_for('logout') }}">Sign out</a>
+  </p>
+</section>
+{% endblock %}

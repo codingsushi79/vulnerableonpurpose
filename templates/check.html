@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Check — VulnLab{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Findings Validator</h2>
+  <p>Submit your collected findings. Labels match what you see when each value is discovered.</p>
+
+  <form method="post" action="{{ url_for('check') }}">
+    <label for="username">{{ check_labels.username }}</label>
+    <input id="username" name="username" autocomplete="off">
+
+    <label for="bypass_method">{{ check_labels.bypass_method }}</label>
+    <input id="bypass_method" name="bypass_method" autocomplete="off">
+
+    <label for="admin_password">{{ check_labels.admin_password }}</label>
+    <input id="admin_password" name="admin_password" type="text" autocomplete="off">
+
+    <label for="lab_flag">{{ check_labels.lab_flag }}</label>
+    <input id="lab_flag" name="lab_flag" autocomplete="off">
+
+    <label for="internal_token">{{ check_labels.internal_token }}</label>
+    <input id="internal_token" name="internal_token" autocomplete="off">
+
+    <label for="cookie_role">{{ check_labels.cookie_role }}</label>
+    <input id="cookie_role" name="cookie_role" autocomplete="off">
+
+    <label for="xss_flag">{{ check_labels.xss_flag }}</label>
+    <input id="xss_flag" name="xss_flag" autocomplete="off">
+
+    <label for="stored_xss">{{ check_labels.stored_xss }}</label>
+    <select id="stored_xss" name="stored_xss">
+      <option value="">—</option>
+      <option value="yes">Yes</option>
+      <option value="no">No</option>
+    </select>
+
+    <label for="idor_flag">{{ check_labels.idor_flag }}</label>
+    <input id="idor_flag" name="idor_flag" autocomplete="off">
+
+    <label for="lfi_flag">{{ check_labels.lfi_flag }}</label>
+    <input id="lfi_flag" name="lfi_flag" autocomplete="off">
+
+    <label for="cmdi_flag">{{ check_labels.cmdi_flag }}</label>
+    <input id="cmdi_flag" name="cmdi_flag" autocomplete="off">
+
+    <label for="ssrf_flag">{{ check_labels.ssrf_flag }}</label>
+    <input id="ssrf_flag" name="ssrf_flag" autocomplete="off">
+
+    <label for="backup_flag">{{ check_labels.backup_flag }}</label>
+    <input id="backup_flag" name="backup_flag" autocomplete="off">
+
+    <label for="reset_flag">{{ check_labels.reset_flag }}</label>
+    <input id="reset_flag" name="reset_flag" autocomplete="off">
+
+    <button type="submit">Validate</button>
+  </form>
+
+  {% if results %}
+    <div style="margin-top: 1.5rem">
+      <h3>Results</h3>
+      {% for check in results.checks %}
+        <div class="check-row">
+          <span class="badge {% if check.ok %}ok{% else %}fail{% endif %}">
+            {% if check.ok %}PASS{% else %}FAIL{% endif %}
+          </span>
+          <div>{{ check.label }}</div>
+        </div>
+      {% endfor %}
+
+      <p class="score">
+        Score: {{ results.score }} / {{ results.total }}
+        {% if results.complete %}
+          — Complete.
+        {% endif %}
+      </p>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}VulnLab{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>VulnLab Portal</h1>
+      <p>Internal training environment for security practice</p>
+      <nav>
+        <a href="{{ url_for('labs') }}">Labs</a>
+        <a href="{{ url_for('login') }}">Login</a>
+        <a href="{{ url_for('dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('search') }}">Search</a>
+        <a href="{{ url_for('feedback') }}">Feedback</a>
+        <a href="{{ url_for('tools_ping') }}">Ping</a>
+        <a href="{{ url_for('fetch_url') }}">Fetch</a>
+        <a href="{{ url_for('check') }}">Check</a>
+      </nav>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+
+    <footer>
+      For authorized local training only. Do not expose to the internet.
+    </footer>
+  </div>
+</body>
+</html>

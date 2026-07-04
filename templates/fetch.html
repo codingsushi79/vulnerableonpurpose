@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Fetch — VulnLab{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>URL Preview Tool</h2>
+  <p>Internal tool fetches a URL and displays the response (for link validation).</p>
+  <form method="get" action="{{ url_for('fetch_url') }}">
+    <label for="url">URL to fetch</label>
+    <input id="url" name="url" value="{{ url }}" placeholder="http://example.com">
+    <button type="submit">Fetch</button>
+  </form>
+
+  {% if result %}
+    <pre class="output">{{ result | tojson(indent=2) }}</pre>
+  {% endif %}
+</section>
+{% endblock %}

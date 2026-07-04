@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Search — VulnLab{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Employee Directory Search</h2>
+  <form method="get" action="{{ url_for('search') }}">
+    <label for="q">Search query</label>
+    <input id="q" name="q" value="{{ raw_query }}" placeholder="name or department">
+    <button type="submit">Search</button>
+  </form>
+
+  {% if raw_query %}
+    <div class="hint-box" style="margin-top: 1rem">
+      <strong>Results for:</strong> {{ query }}
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

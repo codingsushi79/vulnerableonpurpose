@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Ping — VulnLab{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Network Diagnostics — Ping</h2>
+  <p>Check connectivity to internal hosts.</p>
+  <form method="post" action="{{ url_for('tools_ping') }}">
+    <label for="host">Host / IP</label>
+    <input id="host" name="host" value="{{ host }}" placeholder="127.0.0.1">
+    <button type="submit">Run ping</button>
+  </form>
+
+  {% if output is not none %}
+    <pre class="output">{{ output }}</pre>
+  {% endif %}
+</section>
+{% endblock %}

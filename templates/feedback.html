@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Feedback — VulnLab{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Staff Feedback Portal</h2>
+  <form method="post" action="{{ url_for('feedback') }}">
+    <label for="author">Your name</label>
+    <input id="author" name="author" placeholder="anonymous">
+
+    <label for="message">Message</label>
+    <textarea id="message" name="message" rows="4" placeholder="Report an issue…"></textarea>
+
+    <button type="submit">Submit feedback</button>
+  </form>
+
+  <h3 style="margin-top: 1.5rem">Recent feedback</h3>
+  {% for entry in entries %}
+    <div class="feedback-entry">
+      <div class="feedback-meta">{{ entry.author }} · {{ entry.created_at }}</div>
+      <div class="feedback-body">{{ entry.message|safe }}</div>
+    </div>
+  {% else %}
+    <p class="hint-box">No feedback yet.</p>
+  {% endfor %}
+</section>
+{% endblock %}
