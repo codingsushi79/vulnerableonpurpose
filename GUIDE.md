@@ -15,6 +15,7 @@ The `/guide` page is not linked from the portal. Bookmark it for reference while
 - Authentication bypass, session abuse, and privilege escalation
 - Client-side and server-side injection flaws
 - Collecting labeled findings and submitting them for scoring
+- Post-exploitation: web shell access and privilege escalation on the host
 
 ---
 

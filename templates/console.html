@@ -1,0 +1,32 @@
+{% extends "layout_minimal.html" %}
+{% block title %}System Console — SecureCorp{% endblock %}
+{% block content %}
+<section class="panel console-panel">
+  <div class="console-header">
+    <h2>SecureCorp — System Console</h2>
+    <p class="console-meta">session: www-data · host: securecorp-web · cwd: /var/www/securecorp</p>
+  </div>
+
+  {% if history %}
+    <div class="console-log">
+      {% for entry in history %}
+        <div class="console-entry">
+          <div class="console-prompt">www-data@securecorp:$ {{ entry.cmd }}</div>
+          <pre class="console-out">{{ entry.output }}</pre>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('sys_console') }}" class="console-form">
+    <label for="cmd" class="sr-only">Command</label>
+    <div class="console-input-row">
+      <span class="console-prompt-inline">$</span>
+      <input id="cmd" name="cmd" autofocus autocomplete="off" spellcheck="false" placeholder="whoami">
+      <button type="submit">Run</button>
+    </div>
+  </form>
+
+  <p class="console-help">Type <code>help</code> for available commands.</p>
+</section>
+{% endblock %}
