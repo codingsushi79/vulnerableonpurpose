@@ -227,6 +227,11 @@ def home():
     return render_template("home.html")
 
 
+@app.route("/guide")
+def guide():
+    return render_template("guide.html")
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "GET":

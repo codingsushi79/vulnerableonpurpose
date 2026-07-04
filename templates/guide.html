@@ -1,0 +1,287 @@
+{% extends "layout_minimal.html" %}
+{% block title %}Lab Guide — SecureCorp{% endblock %}
+{% block content %}
+<article class="guide">
+  <header class="guide-header">
+    <h1>SecureCorp Lab Guide</h1>
+    <p>Work through each phase on your own. Click <strong>Hints</strong> only when you are stuck.</p>
+  </header>
+
+  <section class="guide-phase">
+    <h2>Setup</h2>
+    <pre class="guide-code">python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+VULNLAB_RESET=1 python app.py</pre>
+    <p>Open <a href="{{ url_for('home') }}">http://127.0.0.1:5000</a> and explore the portal.</p>
+  </section>
+
+  <section class="guide-phase">
+    <h2>Phase 1 — Reconnaissance</h2>
+    <p><strong>Goal:</strong> Map the application before attacking anything.</p>
+    <ol>
+      <li>Browse the site like a new employee. Note pages, forms, and links.</li>
+      <li>Look beyond the UI — source code, machine-readable files, common paths.</li>
+      <li>Find APIs, debug endpoints, or leaked configuration.</li>
+      <li>Record usernames, fields, cookies, and error messages.</li>
+    </ol>
+    <p><strong>Done when:</strong> You have a list of interesting URLs and unexpected sensitive data.</p>
+
+    <details class="guide-hints">
+      <summary>Hints</summary>
+      <div class="guide-hint-body">
+        <details>
+          <summary>Where to start looking</summary>
+          <p>View source on the sign-in page. Fetch <code>/robots.txt</code>. Try <code>/api/status</code> for JSON.</p>
+        </details>
+        <details>
+          <summary>Leaked configuration</summary>
+          <p><code>robots.txt</code> references a path under <code>/backup/</code>. Read the full file — it contains labeled values for later.</p>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <section class="guide-phase">
+    <h2>Phase 2 — Authentication &amp; sessions</h2>
+    <p><strong>Goal:</strong> Get past login and reach administrator content.</p>
+    <ol>
+      <li>Try valid and invalid credentials. Compare error messages.</li>
+      <li>Intercept the login request. Inspect every parameter sent.</li>
+      <li>After login, examine cookies and session storage.</li>
+      <li>Reach the administrator resources on the dashboard.</li>
+    </ol>
+    <p><strong>Done when:</strong> You can view the admin panel and recorded its labeled values.</p>
+
+    <details class="guide-hints">
+      <summary>Hints</summary>
+      <div class="guide-hint-body">
+        <details>
+          <summary>Login interception</summary>
+          <p>The sign-in POST includes hidden fields. Capture and edit the request in Burp, ZAP, or DevTools.</p>
+        </details>
+        <details>
+          <summary>Bypassing authentication</summary>
+          <p>Input is concatenated into a SQL query. Break out of the string in the username field. Combine with role tampering or cookie editing for admin access.</p>
+        </details>
+        <details>
+          <summary>User enumeration</summary>
+          <p>Failed logins return different errors for unknown vs. known usernames. A JSON endpoint accepts a <code>username</code> parameter.</p>
+        </details>
+        <details>
+          <summary>Cookie tampering</summary>
+          <p>The <code>vulnlab_session</code> cookie is URL-safe base64 JSON, not HttpOnly. Decode, set <code>role</code> to admin, re-encode, replace, reload.</p>
+        </details>
+        <details>
+          <summary>Test credentials</summary>
+          <p>Check the HTML comment on the sign-in page for a guest account.</p>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <section class="guide-phase">
+    <h2>Phase 3 — Cross-site scripting</h2>
+    <p><strong>Goal:</strong> Trigger reflected and stored XSS.</p>
+    <ol>
+      <li>Find a page that echoes input in the response.</li>
+      <li>Find a page that stores and re-displays input.</li>
+      <li>Verify execution with a harmless payload.</li>
+      <li>Collect labeled XSS values.</li>
+    </ol>
+    <p><strong>Done when:</strong> Both XSS types work and labeled values are recorded.</p>
+
+    <details class="guide-hints">
+      <summary>Hints</summary>
+      <div class="guide-hint-body">
+        <details>
+          <summary>Reflected XSS</summary>
+          <p>The employee directory search reflects your query without encoding.</p>
+        </details>
+        <details>
+          <summary>Stored XSS</summary>
+          <p>The feedback form stores messages and renders HTML without sanitization.</p>
+        </details>
+        <details>
+          <summary>XSS flag location</summary>
+          <p>One labeled value is in the backup config from Phase 1, not on the search page.</p>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <section class="guide-phase">
+    <h2>Phase 4 — IDOR</h2>
+    <p><strong>Goal:</strong> Read another user's profile by changing an ID.</p>
+    <ol>
+      <li>Find an endpoint returning user profile data.</li>
+      <li>Check whether ownership is validated.</li>
+      <li>Enumerate IDs until you find sensitive admin fields.</li>
+    </ol>
+    <p><strong>Done when:</strong> You have a labeled value from another user's profile.</p>
+
+    <details class="guide-hints">
+      <summary>Hints</summary>
+      <div class="guide-hint-body">
+        <details>
+          <summary>IDOR endpoint</summary>
+          <p>Try <code>/api/user/1</code>, <code>/api/user/2</code>, <code>/api/user/3</code>…</p>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <section class="guide-phase">
+    <h2>Phase 5 — Local file read</h2>
+    <p><strong>Goal:</strong> Read a server file you should not access.</p>
+    <ol>
+      <li>Find a filename/path parameter.</li>
+      <li>Try normal names, then traversal sequences.</li>
+      <li>Collect labeled values from the response.</li>
+    </ol>
+    <p><strong>Done when:</strong> You extracted a labeled flag from a protected file.</p>
+
+    <details class="guide-hints">
+      <summary>Hints</summary>
+      <div class="guide-hint-body">
+        <details>
+          <summary>File viewer</summary>
+          <p>Look for <code>/files?name=</code>. Try filenames mentioned elsewhere first.</p>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <section class="guide-phase">
+    <h2>Phase 6 — Command injection</h2>
+    <p><strong>Goal:</strong> Run commands via a server-side utility.</p>
+    <ol>
+      <li>Find a diagnostic tool that runs shell commands.</li>
+      <li>Inject metacharacters and read the output.</li>
+      <li>Collect the labeled injection flag.</li>
+    </ol>
+    <p><strong>Done when:</strong> You have the command injection label from tool output.</p>
+
+    <details class="guide-hints">
+      <summary>Hints</summary>
+      <div class="guide-hint-body">
+        <details>
+          <summary>Which tool</summary>
+          <p>Network Tools passes input directly to a shell.</p>
+        </details>
+        <details>
+          <summary>Injection characters</summary>
+          <p>Append <code>;</code>, <code>|</code>, <code>&amp;</code>, backticks, or <code>$()</code> after a hostname.</p>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <section class="guide-phase">
+    <h2>Phase 7 — SSRF</h2>
+    <p><strong>Goal:</strong> Make the server fetch an internal URL.</p>
+    <ol>
+      <li>Find a server-side URL fetch feature.</li>
+      <li>Identify internal-only endpoints from earlier recon.</li>
+      <li>Pass the internal URL to the fetch tool.</li>
+      <li>Read the labeled flag in the response.</li>
+    </ol>
+    <p><strong>Done when:</strong> You have the SSRF label from an internal endpoint.</p>
+
+    <details class="guide-hints">
+      <summary>Hints</summary>
+      <div class="guide-hint-body">
+        <details>
+          <summary>URL preview tool</summary>
+          <p>Linked from Network Tools. Accepts a <code>url</code> query parameter.</p>
+        </details>
+        <details>
+          <summary>Internal target</summary>
+          <p>Use <code>INTERNAL_HEALTH_URL</code> from the backup config so the server fetches it.</p>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <section class="guide-phase">
+    <h2>Phase 8 — Password reset</h2>
+    <p><strong>Goal:</strong> Approve a reset without the email flow.</p>
+    <ol>
+      <li>Generate a reset link for a known user.</li>
+      <li>Determine whether the token is random or predictable.</li>
+      <li>Forge a token for an admin and visit the reset URL.</li>
+    </ol>
+    <p><strong>Done when:</strong> You have the password reset label.</p>
+
+    <details class="guide-hints">
+      <summary>Hints</summary>
+      <div class="guide-hint-body">
+        <details>
+          <summary>Token format</summary>
+          <p>URL-safe base64 of the username — no secret key.</p>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <section class="guide-phase">
+    <h2>Phase 9 — Submission</h2>
+    <p><strong>Goal:</strong> Score 14/14 on the hidden form.</p>
+    <ol>
+      <li>Collect every labeled value from the site.</li>
+      <li>Find the submission form (not linked in navigation).</li>
+      <li>Enter each value under its matching label.</li>
+      <li>Submit <strong>Yes</strong> for Stored XSS if your payload ran.</li>
+    </ol>
+    <p><strong>Done when:</strong> The form shows 14/14 complete.</p>
+
+    <details class="guide-hints">
+      <summary>Hints</summary>
+      <div class="guide-hint-body">
+        <details>
+          <summary>Submission URL</summary>
+          <p><a href="{{ url_for('check') }}">/check</a></p>
+        </details>
+        <details>
+          <summary>Bypass method values</summary>
+          <p><code>sqli</code>, <code>sql injection</code>, <code>hidden role</code>, <code>role tamper</code>, <code>cookie</code>, <code>cookie tamper</code></p>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <section class="guide-phase">
+    <h2>Solutions (spoilers)</h2>
+
+    <details class="guide-hints guide-spoilers">
+      <summary>All flags and secrets</summary>
+      <div class="guide-hint-body">
+        <pre class="guide-code">admin_password: Sup3rS3cr3t!
+Dashboard flag: VULN{1nt3rc3pt_4nd_1nj3ct}
+Internal token: tok_live_7f3a9c2e
+XSS canary flag: VULN{xss_p4yl0ad_fired}
+IDOR flag: VULN{id0r_us3r_l33k}
+LFI flag: VULN{l0cal_f1le_r3ad}
+Command injection flag: VULN{c0mm4nd_1nj3ct}
+SSRF flag: VULN{ssrf_1ntern4l}
+Backup config flag: VULN{b4ckup_expos3d}
+Password reset flag: VULN{w34k_r3s3t_t0k3n}</pre>
+      </div>
+    </details>
+
+    <details class="guide-hints guide-spoilers">
+      <summary>Exploit commands</summary>
+      <div class="guide-hint-body">
+        <pre class="guide-code">curl -s http://127.0.0.1:5000/robots.txt
+curl -s http://127.0.0.1:5000/backup/config.bak
+curl -s http://127.0.0.1:5000/api/user/3
+curl -s "http://127.0.0.1:5000/files?name=backup_flag.txt"
+curl -s "http://127.0.0.1:5000/fetch?url=http://127.0.0.1:5000/internal/health"
+curl -s -X POST http://127.0.0.1:5000/tools/ping -d "host=127.0.0.1;id"
+python3 -c "import base64; print(base64.urlsafe_b64encode(b'admin').decode().rstrip('='))"
+curl -s "http://127.0.0.1:5000/reset?user=admin&token=YWRtaW4"</pre>
+      </div>
+    </details>
+  </section>
+</article>
+{% endblock %}

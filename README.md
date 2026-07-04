@@ -21,7 +21,7 @@ Reset the database (required after upgrades):
 VULNLAB_RESET=1 python app.py
 ```
 
-See **[GUIDE.md](GUIDE.md)** for the full walkthrough.
+See **[GUIDE.md](GUIDE.md)** for the walkthrough. Open **http://127.0.0.1:5000/guide** in your browser for interactive hint dropdowns.
 
 ## Challenge areas
 

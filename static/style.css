@@ -440,3 +440,137 @@ code {
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
 }
+
+/* Lab guide */
+.guide {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 1.75rem;
+}
+
+.guide-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.guide-header h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+}
+
+.guide-header p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.guide-phase {
+  margin-bottom: 2rem;
+}
+
+.guide-phase h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.15rem;
+}
+
+.guide-phase ol {
+  margin: 0 0 1rem;
+  padding-left: 1.25rem;
+  color: var(--text);
+}
+
+.guide-phase p {
+  margin: 0 0 0.75rem;
+}
+
+.guide-code {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  font-size: 0.85rem;
+  overflow-x: auto;
+  margin: 0 0 1rem;
+}
+
+.guide-hints {
+  margin-top: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.guide-hints > summary {
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.guide-hints > summary::-webkit-details-marker {
+  display: none;
+}
+
+.guide-hints > summary::before {
+  content: "▸ ";
+  color: var(--accent);
+}
+
+.guide-hints[open] > summary::before {
+  content: "▾ ";
+}
+
+.guide-hint-body {
+  padding: 0 1rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.guide-hint-body details {
+  margin-top: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.guide-hint-body details summary {
+  padding: 0.6rem 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+
+.guide-hint-body details summary::-webkit-details-marker {
+  display: none;
+}
+
+.guide-hint-body details summary::before {
+  content: "+ ";
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.guide-hint-body details[open] summary::before {
+  content: "− ";
+}
+
+.guide-hint-body details p,
+.guide-hint-body details pre {
+  margin: 0;
+  padding: 0.65rem 0.85rem 0.85rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+
+.guide-spoilers {
+  background: #fffbeb;
+  border-color: #fcd34d;
+}
+
+.guide-spoilers > summary {
+  color: var(--warn);
+}
