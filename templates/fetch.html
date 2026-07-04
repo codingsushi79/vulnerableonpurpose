@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Fetch — VulnLab{% endblock %}
+{% block title %}URL Preview — SecureCorp{% endblock %}
 {% block content %}
 <section class="panel">
-  <h2>URL Preview Tool</h2>
-  <p>Internal tool fetches a URL and displays the response (for link validation).</p>
+  <h2>URL Preview</h2>
+  <p>Preview the response from an external or internal URL before sharing it.</p>
   <form method="get" action="{{ url_for('fetch_url') }}">
-    <label for="url">URL to fetch</label>
-    <input id="url" name="url" value="{{ url }}" placeholder="http://example.com">
-    <button type="submit">Fetch</button>
+    <label for="url">URL</label>
+    <input id="url" name="url" value="{{ url }}" placeholder="https://">
+    <button type="submit">Preview</button>
   </form>
 
   {% if result %}

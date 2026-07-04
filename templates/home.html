@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Home — SecureCorp{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Welcome to SecureCorp</h1>
+  <p>Your hub for employee resources, internal tools, and company updates.</p>
+</section>
+
+<div class="card-grid">
+  <a href="{{ url_for('dashboard') }}" class="card">
+    <h3>My Dashboard</h3>
+    <p>View your profile, role, and department resources.</p>
+  </a>
+  <a href="{{ url_for('search') }}" class="card">
+    <h3>Employee Directory</h3>
+    <p>Search colleagues by name or department.</p>
+  </a>
+  <a href="{{ url_for('feedback') }}" class="card">
+    <h3>Submit Feedback</h3>
+    <p>Share suggestions or report workplace issues.</p>
+  </a>
+  <a href="{{ url_for('tools_ping') }}" class="card">
+    <h3>IT — Network Tools</h3>
+    <p>Run connectivity checks on internal hosts.</p>
+  </a>
+</div>
+
+<section class="panel">
+  <h2>Announcements</h2>
+  <ul class="announcements">
+    <li><strong>Mar 1</strong> — Quarterly password rotation reminder for all staff.</li>
+    <li><strong>Feb 18</strong> — Employee directory search has been upgraded.</li>
+    <li><strong>Feb 4</strong> — New feedback portal is now live.</li>
+  </ul>
+</section>
+{% endblock %}

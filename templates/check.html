@@ -1,9 +1,9 @@
-{% extends "base.html" %}
-{% block title %}Check — VulnLab{% endblock %}
+{% extends "layout_minimal.html" %}
+{% block title %}Submission — SecureCorp{% endblock %}
 {% block content %}
 <section class="panel">
-  <h2>Findings Validator</h2>
-  <p>Submit your collected findings. Labels match what you see when each value is discovered.</p>
+  <h2>Internal submission form</h2>
+  <p>Enter collected field values below.</p>
 
   <form method="post" action="{{ url_for('check') }}">
     <label for="username">{{ check_labels.username }}</label>
@@ -52,7 +52,7 @@
     <label for="reset_flag">{{ check_labels.reset_flag }}</label>
     <input id="reset_flag" name="reset_flag" autocomplete="off">
 
-    <button type="submit">Validate</button>
+    <button type="submit">Submit</button>
   </form>
 
   {% if results %}

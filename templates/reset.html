@@ -1,22 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Reset — VulnLab{% endblock %}
+{% block title %}Reset Password — SecureCorp{% endblock %}
 {% block content %}
-<section class="panel">
-  <h2>Password Reset</h2>
-  <p>Request a reset link. Tokens are generated client-side for "speed".</p>
+<section class="panel panel-narrow">
+  <h2>Reset your password</h2>
+  <p>Enter your username and we will generate a reset link.</p>
 
   <form method="post" action="{{ url_for('password_reset') }}">
     <label for="username">Username</label>
-    <input id="username" name="username" value="{{ username }}" placeholder="admin">
-    <button type="submit">Generate reset link</button>
+    <input id="username" name="username" value="{{ username }}">
+    <button type="submit">Send reset link</button>
   </form>
 
   {% if message %}
-    <div class="hint-box" style="margin-top: 1rem">{{ message }}</div>
+    <div class="notice" style="margin-top: 1rem">{{ message }}</div>
   {% endif %}
-
-  <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--muted)">
-    Already have a token? Visit <code>/reset?user=NAME&amp;token=TOKEN</code>
-  </p>
 </section>
 {% endblock %}

@@ -68,7 +68,7 @@ app.secret_key = "dev-only-not-random"
 
 
 def check_tag(key: str) -> str:
-    return f"[Check: {CHECK_LABELS[key]}]"
+    return CHECK_LABELS[key]
 
 
 @app.context_processor
@@ -94,7 +94,7 @@ def init_db():
     SECRETS_DIR.mkdir(exist_ok=True)
     (SECRETS_DIR / "backup_flag.txt").write_text(
         f"CONFIDENTIAL BACKUP\n"
-        f"{check_tag('lfi_flag')} {LFI_FLAG}\n",
+        f"{check_tag('lfi_flag')}: {LFI_FLAG}\n",
         encoding="utf-8",
     )
     (SECRETS_DIR / "employee_records.txt").write_text(
@@ -146,17 +146,17 @@ def init_db():
         VALUES (?, ?, ?, ?, ?)
         """,
         [
-            (1, "guest@vulnlab.local", "Support", "key_guest_public", "Guest access only."),
+            (1, "guest@securecorp.local", "Support", "key_guest_public", "Guest access only."),
             (
                 2,
-                "analyst@vulnlab.local",
+                "analyst@securecorp.local",
                 "SOC",
                 "key_analyst_9b2c",
-                "Watch for suspicious login attempts.",
+                "Monitor login anomalies.",
             ),
             (
                 3,
-                "admin@vulnlab.local",
+                "admin@securecorp.local",
                 "IT Admin",
                 IDOR_FLAG,
                 "Master credentials rotated quarterly.",
@@ -219,12 +219,12 @@ def weak_reset_token(username: str) -> str:
 
 @app.route("/")
 def index():
-    return redirect(url_for("login"))
+    return redirect(url_for("home"))
 
 
-@app.route("/labs")
-def labs():
-    return render_template("labs.html")
+@app.route("/home")
+def home():
+    return render_template("home.html")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -321,13 +321,7 @@ def feedback():
                 (author, message),
             )
             db.commit()
-            if "<script" in message.lower():
-                flash(
-                    f"{check_tag('stored_xss')} Submit Yes on /check if the payload executed.",
-                    "success",
-                )
-            else:
-                flash("Feedback submitted.", "success")
+            flash("Feedback submitted.", "success")
             return redirect(url_for("feedback"))
 
     rows = db.execute(
@@ -385,8 +379,8 @@ def files():
     name = request.args.get("name", "readme.txt")
     if name == "readme.txt":
         return (
-            "VulnLab file viewer v1.0\n"
-            "Try other filenames. Backup data lives under backup_flag.txt\n"
+            "SecureCorp document viewer\n"
+            "Specify a filename to retrieve archived files.\n"
         )
     # Path traversal — no canonicalization
     target = SECRETS_DIR / name
@@ -415,8 +409,7 @@ def tools_ping():
                 output = completed.stdout + completed.stderr
                 if any(ch in host for ch in (";", "|", "&", "`", "$(")):
                     output += (
-                        f"\n[debug] command injection detected — "
-                        f"{check_tag('cmdi_flag')} {CMDI_FLAG}\n"
+                        f"\n[debug] {check_tag('cmdi_flag')}: {CMDI_FLAG}\n"
                     )
             except subprocess.TimeoutExpired:
                 output = "Command timed out."
@@ -440,7 +433,7 @@ def fetch_url():
         )
 
     try:
-        req = urlrequest.Request(url, headers={"User-Agent": "VulnLab-Fetcher/1.0"})
+        req = urlrequest.Request(url, headers={"User-Agent": "SecureCorp-Preview/1.0"})
         with urlrequest.urlopen(req, timeout=3) as resp:
             body = resp.read(4096).decode("utf-8", errors="replace")
             result = {"status": resp.status, "body": body}
@@ -474,7 +467,7 @@ def password_reset():
         )
     elif token and username:
         if token == weak_reset_token(username):
-            message = f"Password reset approved. {check_tag('reset_flag')} {RESET_FLAG}"
+            message = f"Password reset approved. {check_tag('reset_flag')}: {RESET_FLAG}"
         else:
             message = "Invalid reset token."
 
@@ -498,17 +491,17 @@ Disallow: /secrets/
 def backup_config():
     port = request.environ.get("SERVER_PORT", "5000")
     internal_url = f"http://127.0.0.1:{port}/internal/health"
-    body = f"""# Legacy VulnLab configuration backup — DO NOT DEPLOY
+    body = f"""# SecureCorp legacy configuration backup
 DB_HOST=127.0.0.1
-DB_NAME=vulnlab
-DB_USER=vulnlab_app
+DB_NAME=securecorp
+DB_USER=portal_app
 DB_PASS=Ch4ng3M3!
 
 INTERNAL_HEALTH_URL={internal_url}
-{check_tag('backup_flag')} {BACKUP_FLAG}
+{check_tag('backup_flag')}: {BACKUP_FLAG}
 
-# XSS canary
-{check_tag('xss_flag')} {XSS_FLAG}
+# Canary token
+{check_tag('xss_flag')}: {XSS_FLAG}
 """
     return app.response_class(body, mimetype="text/plain")
 
@@ -570,23 +563,10 @@ def check():
 def api_status():
     ident = current_identity()
     return {
-        "service": "VulnLab Portal",
-        "version": "2.0.0-debug",
-        "session_backend": "flask+cookie",
-        "db_engine": "sqlite3",
+        "service": "SecureCorp Employee Portal",
+        "version": "2.4.1",
         "authenticated": bool(ident.get("username")),
         "role": ident.get("role"),
-        "endpoints": [
-            "/search",
-            "/feedback",
-            "/api/user/<id>",
-            "/files",
-            "/tools/ping",
-            "/fetch",
-            "/reset",
-            "/robots.txt",
-        ],
-        "hint": "Developers left verbose diagnostics enabled.",
     }
 
 

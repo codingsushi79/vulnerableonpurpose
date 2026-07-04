@@ -1,26 +1,27 @@
 {% extends "base.html" %}
-{% block title %}Feedback — VulnLab{% endblock %}
+{% block title %}Feedback — SecureCorp{% endblock %}
 {% block content %}
 <section class="panel">
-  <h2>Staff Feedback Portal</h2>
+  <h2>Employee Feedback</h2>
+  <p>We value your input. Submissions are visible to all staff.</p>
   <form method="post" action="{{ url_for('feedback') }}">
     <label for="author">Your name</label>
-    <input id="author" name="author" placeholder="anonymous">
+    <input id="author" name="author" placeholder="Optional">
 
     <label for="message">Message</label>
-    <textarea id="message" name="message" rows="4" placeholder="Report an issue…"></textarea>
+    <textarea id="message" name="message" rows="4" placeholder="Share your feedback…"></textarea>
 
-    <button type="submit">Submit feedback</button>
+    <button type="submit">Submit</button>
   </form>
 
-  <h3 style="margin-top: 1.5rem">Recent feedback</h3>
+  <h3 style="margin-top: 1.5rem">Recent submissions</h3>
   {% for entry in entries %}
     <div class="feedback-entry">
       <div class="feedback-meta">{{ entry.author }} · {{ entry.created_at }}</div>
       <div class="feedback-body">{{ entry.message|safe }}</div>
     </div>
   {% else %}
-    <p class="hint-box">No feedback yet.</p>
+    <p class="notice">No submissions yet.</p>
   {% endfor %}
 </section>
 {% endblock %}

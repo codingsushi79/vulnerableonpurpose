@@ -1,17 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Ping — VulnLab{% endblock %}
+{% block title %}Network Tools — SecureCorp{% endblock %}
 {% block content %}
 <section class="panel">
-  <h2>Network Diagnostics — Ping</h2>
-  <p>Check connectivity to internal hosts.</p>
+  <h2>Network Diagnostics</h2>
+  <p>IT utility to verify connectivity to a host on the corporate network.</p>
   <form method="post" action="{{ url_for('tools_ping') }}">
-    <label for="host">Host / IP</label>
-    <input id="host" name="host" value="{{ host }}" placeholder="127.0.0.1">
-    <button type="submit">Run ping</button>
+    <label for="host">Hostname or IP address</label>
+    <input id="host" name="host" value="{{ host }}" placeholder="host.securecorp.local">
+    <button type="submit">Run diagnostic</button>
   </form>
 
   {% if output is not none %}
     <pre class="output">{{ output }}</pre>
   {% endif %}
+
+  <p class="form-footer">
+    <a href="{{ url_for('fetch_url') }}">URL preview tool</a>
+  </p>
 </section>
 {% endblock %}

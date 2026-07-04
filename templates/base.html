@@ -3,26 +3,32 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{% block title %}VulnLab{% endblock %}</title>
+  <title>{% block title %}SecureCorp{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>VulnLab Portal</h1>
-      <p>Internal training environment for security practice</p>
-      <nav>
-        <a href="{{ url_for('labs') }}">Labs</a>
-        <a href="{{ url_for('login') }}">Login</a>
-        <a href="{{ url_for('dashboard') }}">Dashboard</a>
-        <a href="{{ url_for('search') }}">Search</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-mark">S</span>
+        <div>
+          <a href="{{ url_for('home') }}" class="brand-name">SecureCorp</a>
+          <span class="brand-tag">Employee Portal</span>
+        </div>
+      </div>
+      <nav class="site-nav">
+        <a href="{{ url_for('home') }}">Home</a>
+        <a href="{{ url_for('dashboard') }}">My Dashboard</a>
+        <a href="{{ url_for('search') }}">Directory</a>
         <a href="{{ url_for('feedback') }}">Feedback</a>
-        <a href="{{ url_for('tools_ping') }}">Ping</a>
-        <a href="{{ url_for('fetch_url') }}">Fetch</a>
-        <a href="{{ url_for('check') }}">Check</a>
+        <a href="{{ url_for('tools_ping') }}">Network Tools</a>
+        <a href="{{ url_for('password_reset') }}">Reset Password</a>
+        <a href="{{ url_for('login') }}" class="nav-signin">Sign In</a>
       </nav>
-    </header>
+    </div>
+  </header>
 
+  <main class="wrap">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
         {% for category, message in messages %}
@@ -32,10 +38,10 @@
     {% endwith %}
 
     {% block content %}{% endblock %}
+  </main>
 
-    <footer>
-      For authorized local training only. Do not expose to the internet.
-    </footer>
-  </div>
+  <footer class="site-footer">
+    <p>&copy; 2026 SecureCorp, Inc. · <a href="{{ url_for('feedback') }}">Help</a> · <a href="{{ url_for('password_reset') }}">Account</a></p>
+  </footer>
 </body>
 </html>
