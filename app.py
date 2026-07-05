@@ -8,6 +8,8 @@ NEVER deploy this to the public internet.
 import base64
 import json
 import os
+import re
+import secrets
 import sqlite3
 import subprocess
 from functools import wraps
@@ -30,24 +32,13 @@ from flask import (
 )
 from markupsafe import Markup
 
+import game as game_mode
+import guide_challenges
+import lab_flags
+
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "vulnlab.db"
 SECRETS_DIR = APP_DIR / "secrets"
-
-# Hard-coded secrets students should discover via recon / exploitation
-ADMIN_PASSWORD = "Sup3rS3cr3t!"
-LAB_FLAG = "VULN{1nt3rc3pt_4nd_1nj3ct}"
-INTERNAL_TOKEN = "tok_live_7f3a9c2e"
-XSS_FLAG = "VULN{xss_p4yl0ad_fired}"
-IDOR_FLAG = "VULN{id0r_us3r_l33k}"
-LFI_FLAG = "VULN{l0cal_f1le_r3ad}"
-CMDI_FLAG = "VULN{c0mm4nd_1nj3ct}"
-SSRF_FLAG = "VULN{ssrf_1ntern4l}"
-BACKUP_FLAG = "VULN{b4ckup_expos3d}"
-RESET_FLAG = "VULN{w34k_r3s3t_t0k3n}"
-SSTI_FLAG = "VULN{ssti_t3mplat3}"
-PROFILE_FLAG = "VULN{pr0f1l3_3sc4l4te}"
-REPORT_FLAG = "VULN{r3p0rt_sqli}"
 
 # Labels match the /check form — shown when each value is discovered
 CHECK_LABELS = {
@@ -71,7 +62,16 @@ CHECK_LABELS = {
 }
 
 app = Flask(__name__)
-app.secret_key = "dev-only-not-random"
+
+game_mode.configure(
+    cops_and_robbers=os.environ.get("COPS_AND_ROBBERS") == "1",
+    time_trial=os.environ.get("TIME_TRIAL") == "1",
+)
+if game_mode.game_mode_active() and lab_flags.VAULT_PATH.exists():
+    lab_flags.load(use_vault=True)
+else:
+    lab_flags.load(use_vault=False)
+app.secret_key = lab_flags.get_epoch()
 
 
 def check_tag(key: str) -> str:
@@ -81,11 +81,23 @@ def check_tag(key: str) -> str:
 @app.context_processor
 def inject_check_labels():
     ident = current_identity()
+    gs = game_mode.public_status()
     return {
         "check_labels": CHECK_LABELS,
         "check_tag": check_tag,
         "identity": ident,
         "logged_in": bool(ident.get("username")),
+        "game_active": game_mode.game_mode_active(),
+        "cops_and_robbers": game_mode.COPS_AND_ROBBERS,
+        "time_trial": game_mode.TIME_TRIAL,
+        "game_status": gs,
+        "game_finished": gs["phase"] == "finished",
+        "guide_unlocked": guide_challenges.unlocked_list(session),
+        "guide_ready": {
+            n: guide_challenges.phase_ready(n, session)
+            for n in guide_challenges.GUIDE_CHALLENGES
+        },
+        "guide_challenges": guide_challenges.GUIDE_CHALLENGES,
     }
 
 
@@ -103,11 +115,19 @@ def close_db(_exc):
         db.close()
 
 
-def init_db():
+def guide_mark(key: str) -> None:
+    progress = session.setdefault("guide_progress", [])
+    if key not in progress:
+        progress.append(key)
+        session.modified = True
+
+
+def init_db(*, empty_users: bool = False):
+    secrets = lab_flags.all_secrets()
     SECRETS_DIR.mkdir(exist_ok=True)
     (SECRETS_DIR / "backup_flag.txt").write_text(
         f"CONFIDENTIAL BACKUP\n"
-        f"{check_tag('lfi_flag')}: {LFI_FLAG}\n",
+        f"{check_tag('lfi_flag')}: {secrets['lfi_flag']}\n",
         encoding="utf-8",
     )
     (SECRETS_DIR / "employee_records.txt").write_text(
@@ -153,37 +173,39 @@ def init_db():
         );
         """
     )
-    db.executemany(
-        "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-        [
-            ("guest", "guest123", "user"),
-            ("analyst", "password", "user"),
-            ("admin", ADMIN_PASSWORD, "admin"),
-        ],
-    )
-    db.executemany(
-        """
-        INSERT INTO profiles (user_id, email, department, api_key, secret_note)
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        [
-            (1, "guest@securecorp.local", "Support", "key_guest_public", "Guest access only."),
-            (
-                2,
-                "analyst@securecorp.local",
-                "SOC",
-                "key_analyst_9b2c",
-                "Monitor login anomalies.",
-            ),
-            (
-                3,
-                "admin@securecorp.local",
-                "IT Admin",
-                IDOR_FLAG,
-                "Master credentials rotated quarterly.",
-            ),
-        ],
-    )
+    if not empty_users:
+        pw = secrets["admin_password"]
+        db.executemany(
+            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+            [
+                ("guest", "guest123", "user"),
+                ("analyst", "password", "user"),
+                ("admin", pw, "admin"),
+            ],
+        )
+        db.executemany(
+            """
+            INSERT INTO profiles (user_id, email, department, api_key, secret_note)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                (1, "guest@securecorp.local", "Support", "key_guest_public", "Guest access only."),
+                (
+                    2,
+                    "analyst@securecorp.local",
+                    "SOC",
+                    "key_analyst_9b2c",
+                    "Monitor login anomalies.",
+                ),
+                (
+                    3,
+                    "admin@securecorp.local",
+                    "IT Admin",
+                    secrets["idor_flag"],
+                    "Master credentials rotated quarterly.",
+                ),
+            ],
+        )
     db.execute(
         "INSERT INTO feedback (author, message) VALUES (?, ?)",
         ("system", "Welcome to the feedback portal. Reports are visible to all staff."),
@@ -209,11 +231,17 @@ def encode_session_cookie(payload: dict) -> str:
 
 
 def current_identity() -> dict:
+    epoch = lab_flags.get_epoch()
     cookie_data = decode_session_cookie(request.cookies.get("vulnlab_session"))
+    if cookie_data.get("epoch") != epoch:
+        cookie_data = {}
     session_data = {
         "username": session.get("username"),
         "role": session.get("role", "guest"),
     }
+    if session.get("lab_epoch") and session.get("lab_epoch") != epoch:
+        session.clear()
+        session_data = {"username": None, "role": "guest"}
     if cookie_data.get("username"):
         session_data["username"] = cookie_data["username"]
     if cookie_data.get("role"):
@@ -249,16 +277,120 @@ def admin_required(view):
 
 
 def apply_identity(resp, username: str, role: str):
+    epoch = lab_flags.get_epoch()
     session["username"] = username
     session["role"] = role
+    session["lab_epoch"] = epoch
     resp.set_cookie(
         "vulnlab_session",
-        encode_session_cookie({"username": username, "role": role}),
+        encode_session_cookie({"username": username, "role": role, "epoch": epoch}),
         httponly=False,
         secure=False,
         samesite="Lax",
     )
     return resp
+
+
+def clear_auth_cookies(resp):
+    session.clear()
+    resp.delete_cookie("vulnlab_session")
+    return resp
+
+
+def request_client_ip() -> str:
+    if not game_mode.game_mode_active():
+        return request.remote_addr or "127.0.0.1"
+    sid = session.setdefault("game_session_id", secrets.token_hex(8))
+    team = session.get("game_team")
+    if team in ("cop", "perp"):
+        return game_mode.assign_player_ip(sid, team)
+    return request.remote_addr or "127.0.0.1"
+
+
+def log_detail_for_request() -> str:
+    path = request.path
+    if path == "/login" and request.method == "POST":
+        return "Authentication attempt"
+    if path == "/check":
+        return "Submission form access"
+    if path.startswith("/files"):
+        return "Document viewer request"
+    if path == "/tools/ping":
+        return "Network diagnostics"
+    if path == "/fetch":
+        return "URL preview fetch"
+    if path == "/admin/register":
+        return "Admin user provisioning"
+    if path.startswith("/api/"):
+        return "API call"
+    return "Page request"
+
+
+def suspicious_admin_login(authenticated: bool, row, role_param: str, effective_role: str) -> bool:
+    if effective_role != "admin":
+        return False
+    if not authenticated:
+        return True
+    if role_param == "admin" and row["role"] != "admin":
+        return True
+    return False
+
+
+GAME_EXEMPT_ENDPOINTS = {
+    "static",
+    "game_lobby",
+    "game_join",
+    "game_cops_setup",
+    "game_trial_start",
+    "game_status_api",
+    "api_check_sync",
+}
+
+
+@app.before_request
+def validate_lab_epoch():
+    """Drop stale cookies from before the last VULNLAB_RESET."""
+    if request.endpoint == "static":
+        return None
+    epoch = lab_flags.get_epoch()
+    raw = request.cookies.get("vulnlab_session")
+    if raw:
+        data = decode_session_cookie(raw)
+        if data.get("epoch") != epoch:
+            session.clear()
+            g.stale_lab_cookies = True
+    return None
+
+
+@app.after_request
+def expire_stale_cookies(resp):
+    if g.pop("stale_lab_cookies", None):
+        resp.delete_cookie("vulnlab_session")
+    return resp
+
+
+@app.before_request
+def game_before_request():
+    if not game_mode.game_mode_active():
+        return None
+    if request.endpoint in GAME_EXEMPT_ENDPOINTS:
+        return None
+
+    ip = request_client_ip()
+    if game_mode.COPS_AND_ROBBERS and game_mode.is_ip_banned(ip):
+        if session.get("game_team") != "cop":
+            return render_template("banned.html"), 403
+
+    if game_mode.COPS_AND_ROBBERS and game_mode.get_state().phase == "active":
+        ident = current_identity()
+        game_mode.log_request(
+            ip,
+            request.method,
+            request.full_path.rstrip("?") if request.query_string else request.path,
+            ident.get("username") or "—",
+            log_detail_for_request(),
+        )
+    return None
 
 
 def weak_reset_token(username: str) -> str:
@@ -268,6 +400,8 @@ def weak_reset_token(username: str) -> str:
 
 @app.route("/")
 def index():
+    if game_mode.game_mode_active() and game_mode.get_state().phase == "lobby":
+        return redirect(url_for("game_lobby"))
     return redirect(url_for("home"))
 
 
@@ -278,7 +412,42 @@ def home():
 
 @app.route("/guide")
 def guide():
-    return render_template("guide.html")
+    if game_mode.game_mode_active():
+        return render_template(
+            "guide.html",
+            competitive_guide=True,
+        )
+    return render_template("guide.html", competitive_guide=False)
+
+
+@app.route("/guide/unlock/<int:phase>", methods=["POST"])
+def guide_unlock(phase: int):
+    if not game_mode.game_mode_active():
+        return redirect(url_for("guide"))
+    if phase not in guide_challenges.GUIDE_CHALLENGES:
+        flash("Unknown phase.", "error")
+        return redirect(url_for("guide"))
+    if guide_challenges.is_unlocked(phase, session):
+        return redirect(url_for("guide"))
+    if not guide_challenges.phase_ready(phase, session):
+        flash("Complete the challenge first — hints stay locked until the server sees it.", "error")
+        return redirect(url_for("guide"))
+
+    unlocked = session.setdefault("guide_unlocked", [])
+    unlocked.append(phase)
+    session.modified = True
+
+    spec = guide_challenges.GUIDE_CHALLENGES[phase]
+    ident = current_identity()
+    ip = request_client_ip()
+    if game_mode.COPS_AND_ROBBERS:
+        game_mode.log_hint_unlock(ip, ident.get("username") or "—", phase, spec["cop_log"])
+    elif game_mode.TIME_TRIAL:
+        game_mode.add_trial_penalty(spec["time_cost"])
+        flash(f"Hints unlocked. +{spec['time_cost']}s added to your time.", "success")
+    else:
+        flash("Hints unlocked.", "success")
+    return redirect(url_for("guide"))
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -308,6 +477,11 @@ def login():
         effective_user = row["username"] if row else username or "anonymous"
         effective_role = role if role == "admin" else (row["role"] if row else "user")
 
+        if game_mode.COPS_AND_ROBBERS and suspicious_admin_login(
+            authenticated, row, role, effective_role
+        ):
+            game_mode.log_admin_intrusion(request_client_ip(), effective_user)
+
         resp = make_response(redirect(url_for("dashboard")))
         apply_identity(resp, effective_user, effective_role)
         flash(f"Welcome, {effective_user}.", "success")
@@ -330,12 +504,18 @@ def dashboard():
     ident = current_identity()
     secrets = {}
     if ident.get("role") == "admin":
+        guide_mark("admin_dashboard")
         secrets = {
-            "admin_password": ADMIN_PASSWORD,
-            "lab_flag": LAB_FLAG,
-            "internal_token": INTERNAL_TOKEN,
+            "admin_password": lab_flags.get("admin_password"),
+            "lab_flag": lab_flags.get("lab_flag"),
+            "internal_token": lab_flags.get("internal_token"),
         }
-    return render_template("dashboard.html", identity=ident, secrets=secrets)
+    return render_template(
+        "dashboard.html",
+        identity=ident,
+        secrets=secrets,
+        show_logs=game_mode.COPS_AND_ROBBERS,
+    )
 
 
 @app.route("/admin/register", methods=["GET", "POST"])
@@ -381,10 +561,8 @@ def admin_register():
         flash("That username is already taken.", "error")
         return render_template("register.html"), 409
 
-    resp = make_response(redirect(url_for("dashboard")))
-    apply_identity(resp, username, role)
-    flash(f"Account created. You are now signed in as {username}.", "success")
-    return resp
+    flash(f"Employee account created for {username}.", "success")
+    return redirect(url_for("dashboard"))
 
 
 @app.route("/logout")
@@ -400,13 +578,16 @@ def logout():
 def search():
     query = request.args.get("q", "")
     ssti_result = None
+    if query and "<script" in query.lower():
+        guide_mark("xss_reflected")
     if query and ("{{" in query or "{%" in query):
         try:
             ssti_result = render_template_string(
                 query,
-                ssti_flag=SSTI_FLAG,
+                ssti_flag=lab_flags.get("ssti_flag"),
                 check_tag=check_tag,
             )
+            guide_mark("ssti_probe")
         except Exception as exc:
             ssti_result = f"Template error: {exc}"
     return render_template(
@@ -437,8 +618,9 @@ def profile():
     if request.method == "POST":
         email = request.form.get("email", email)
         access_level = request.form.get("access_level", "standard")
+        guide_mark("profile_post")
         if access_level == "admin":
-            message = f"Profile elevated. {check_tag('profile_flag')}: {PROFILE_FLAG}"
+            message = f"Profile elevated. {check_tag('profile_flag')}: {lab_flags.get('profile_flag')}"
         else:
             message = "Profile saved successfully."
     return render_template("profile.html", identity=ident, email=email, message=message)
@@ -447,6 +629,8 @@ def profile():
 @app.route("/api/reports")
 def api_reports():
     dept = request.args.get("dept", "")
+    if dept:
+        guide_mark("reports_api")
     db = get_db()
     query = (
         "SELECT u.username, p.department FROM users u "
@@ -459,8 +643,9 @@ def api_reports():
         return {"error": str(exc)}, 500
     reports = [{"username": r["username"], "department": r["department"]} for r in rows]
     payload = {"reports": reports, "count": len(reports)}
-    if len(reports) >= 3:
-        payload["report_flag"] = REPORT_FLAG
+    need = 1 if game_mode.game_mode_active() else 3
+    if len(reports) >= need:
+        payload["report_flag"] = lab_flags.get("report_flag")
         payload["report_flag_label"] = check_tag("report_flag")
     return payload
 
@@ -472,6 +657,8 @@ def feedback():
         author = request.form.get("author", "anonymous").strip() or "anonymous"
         message = request.form.get("message", "").strip()
         if message:
+            if "<script" in message.lower():
+                guide_mark("xss_stored")
             db.execute(
                 "INSERT INTO feedback (author, message) VALUES (?, ?)",
                 (author, message),
@@ -493,6 +680,7 @@ def feedback():
 
 @app.route("/api/user/<int:user_id>")
 def api_user(user_id):
+    guide_mark("idor_api")
     # IDOR — no ownership check; sequential IDs expose other users
     db = get_db()
     row = db.execute(
@@ -515,7 +703,7 @@ def api_user(user_id):
         "api_key": row["api_key"],
         "secret_note": row["secret_note"],
     }
-    if row["api_key"] == IDOR_FLAG:
+    if row["api_key"] == lab_flags.get("idor_flag"):
         data["api_key_check_label"] = CHECK_LABELS["idor_flag"]
     return data
 
@@ -534,6 +722,8 @@ def api_check_user():
 @login_required
 def files():
     name = request.args.get("name", "readme.txt")
+    if name != "readme.txt":
+        guide_mark("lfi_read")
     if name == "readme.txt":
         return (
             "SecureCorp document viewer\n"
@@ -554,6 +744,64 @@ def files():
         return f"Could not open: {name}", 404
 
 
+# Weak outbound filter on the diagnostics shell — bypassable, but blocks obvious abuse.
+_PING_BLOCKED_COMMANDS = re.compile(
+    r"\b("
+    r"rm|rmdir|curl|wget|nc|netcat|nmap|python[23]?|perl|ruby|node|npm|"
+    r"bash|sh|zsh|dash|chmod|chown|kill|pkill|mv|cp|dd|sudo|su|env|export|"
+    r"openssl|ssh|scp|ftp|telnet|reboot|shutdown|launchctl|osascript"
+    r")\b",
+    re.IGNORECASE,
+)
+_PING_BLOCKED_PATHS = re.compile(
+    r"(?:\.\./|\.\.\\|"
+    r"/etc/|/root/|/usr/|/var/|/home/|/proc/|/sys/|/tmp/|/dev/|"
+    r"\bapp\.py\b|\bgame\.py\b|\bvulnlab\.db\b|\.env\b|requirements\.txt|\.lab_flags\.json)",
+    re.IGNORECASE,
+)
+_PING_BLOCKED_PY = re.compile(r"\.py\b", re.IGNORECASE)
+
+
+def validate_ping_host(host: str) -> str | None:
+    """Return an error message when input should be rejected."""
+    if not host or len(host) > 200:
+        return "Invalid host."
+    if any(ch in host for ch in (">", "<", "\n", "\r", "\0")):
+        return "Invalid characters in host."
+    if _PING_BLOCKED_PATHS.search(host):
+        return "Diagnostics blocked: path or file not allowed."
+    if _PING_BLOCKED_PY.search(host):
+        return "Diagnostics blocked: source files cannot be read via this tool."
+    if _PING_BLOCKED_COMMANDS.search(host):
+        return "Diagnostics blocked: command not permitted."
+    return None
+
+
+def run_ping_diagnostic(host: str) -> str:
+    err = validate_ping_host(host)
+    if err:
+        return err
+
+    try:
+        completed = subprocess.run(
+            f"ping -c 1 {host}",
+            shell=True,
+            capture_output=True,
+            text=True,
+            timeout=3,
+            cwd=str(APP_DIR),
+        )
+        output = completed.stdout + completed.stderr
+        if any(ch in host for ch in (";", "|", "&", "`", "$(")):
+            guide_mark("cmdi_run")
+            output += f"\n[debug] {check_tag('cmdi_flag')}: {lab_flags.get('cmdi_flag')}\n"
+        return output
+    except subprocess.TimeoutExpired:
+        return "Command timed out."
+    except OSError as exc:
+        return str(exc)
+
+
 @app.route("/tools/ping", methods=["GET", "POST"])
 def tools_ping():
     output = None
@@ -561,24 +809,7 @@ def tools_ping():
     if request.method == "POST":
         host = request.form.get("host", "").strip()
         if host:
-            # Command injection — shell=True with unsanitized input
-            try:
-                completed = subprocess.run(
-                    f"ping -c 1 {host}",
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=3,
-                )
-                output = completed.stdout + completed.stderr
-                if any(ch in host for ch in (";", "|", "&", "`", "$(")):
-                    output += (
-                        f"\n[debug] {check_tag('cmdi_flag')}: {CMDI_FLAG}\n"
-                    )
-            except subprocess.TimeoutExpired:
-                output = "Command timed out."
-            except OSError as exc:
-                output = str(exc)
+            output = run_ping_diagnostic(host)
     return render_template("ping.html", host=host, output=output)
 
 
@@ -587,6 +818,9 @@ def fetch_url():
     url = request.args.get("url", "")
     if not url:
         return render_template("fetch.html", result=None, url="")
+
+    if "internal/health" in url or "127.0.0.1" in url:
+        guide_mark("ssrf_fetch")
 
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
@@ -611,7 +845,7 @@ def internal_health():
     return {
         "status": "ok",
         "environment": "internal",
-        "ssrf_flag": SSRF_FLAG,
+        "ssrf_flag": lab_flags.get("ssrf_flag"),
         "ssrf_flag_check_label": CHECK_LABELS["ssrf_flag"],
         "message": "Internal health check — not for external callers.",
     }
@@ -624,13 +858,14 @@ def password_reset():
     username = request.form.get("username", "") if request.method == "POST" else request.args.get("user", "")
 
     if request.method == "POST" and username:
+        guide_mark("reset_gen")
         message = (
             f"Reset link generated for {username}: "
             f"/reset?user={username}&token={weak_reset_token(username)}"
         )
     elif token and username:
         if token == weak_reset_token(username):
-            message = f"Password reset approved. {check_tag('reset_flag')}: {RESET_FLAG}"
+            message = f"Password reset approved. {check_tag('reset_flag')}: {lab_flags.get('reset_flag')}"
         else:
             message = "Invalid reset token."
 
@@ -639,6 +874,7 @@ def password_reset():
 
 @app.route("/robots.txt")
 def robots():
+    guide_mark("robots")
     body = """User-agent: *
 Disallow: /backup/
 Disallow: /backup/config.bak
@@ -652,8 +888,12 @@ Disallow: /secrets/
 
 @app.route("/backup/config.bak")
 def backup_config():
+    guide_mark("backup_bak")
     port = request.environ.get("SERVER_PORT", "5000")
     internal_url = f"http://127.0.0.1:{port}/internal/health"
+    idor_line = ""
+    if game_mode.game_mode_active():
+        idor_line = f"{check_tag('idor_flag')}: {lab_flags.get('idor_flag')}\n"
     body = f"""# SecureCorp legacy configuration backup
 DB_HOST=127.0.0.1
 DB_NAME=securecorp
@@ -661,16 +901,17 @@ DB_USER=portal_app
 DB_PASS=Ch4ng3M3!
 
 INTERNAL_HEALTH_URL={internal_url}
-{check_tag('backup_flag')}: {BACKUP_FLAG}
-
+{check_tag('backup_flag')}: {lab_flags.get('backup_flag')}
+{idor_line}
 # Canary token
-{check_tag('xss_flag')}: {XSS_FLAG}
+{check_tag('xss_flag')}: {lab_flags.get('xss_flag')}
 """
     return app.response_class(body, mimetype="text/plain")
 
 
 @app.route("/check", methods=["GET", "POST"])
 def check():
+    guide_mark("check_visit")
     results = None
     if request.method == "POST":
         submitted = {k: request.form.get(k, "").strip() for k in request.form}
@@ -682,7 +923,12 @@ def check():
         def add(label, ok):
             checks.append({"label": label, "ok": ok})
 
-        add(CHECK_LABELS["username"], submitted.get("username") in {"guest", "analyst", "admin", "anonymous"})
+        add(
+            CHECK_LABELS["username"],
+            bool(submitted.get("username"))
+            if game_mode.game_mode_active()
+            else submitted.get("username") in {"guest", "analyst", "admin", "anonymous"},
+        )
 
         bypass = submitted.get("bypass_method", "")
         add(
@@ -698,21 +944,21 @@ def check():
             },
         )
 
-        add(CHECK_LABELS["admin_password"], submitted.get("admin_password") == ADMIN_PASSWORD)
-        add(CHECK_LABELS["lab_flag"], submitted.get("lab_flag") == LAB_FLAG)
-        add(CHECK_LABELS["internal_token"], submitted.get("internal_token") == INTERNAL_TOKEN)
+        add(CHECK_LABELS["admin_password"], submitted.get("admin_password") == lab_flags.get("admin_password"))
+        add(CHECK_LABELS["lab_flag"], submitted.get("lab_flag") == lab_flags.get("lab_flag"))
+        add(CHECK_LABELS["internal_token"], submitted.get("internal_token") == lab_flags.get("internal_token"))
         add(CHECK_LABELS["cookie_role"], submitted.get("cookie_role") == "admin")
-        add(CHECK_LABELS["xss_flag"], submitted.get("xss_flag") == XSS_FLAG)
+        add(CHECK_LABELS["xss_flag"], submitted.get("xss_flag") == lab_flags.get("xss_flag"))
         add(CHECK_LABELS["stored_xss"], submitted.get("stored_xss") == "yes")
-        add(CHECK_LABELS["idor_flag"], submitted.get("idor_flag") == IDOR_FLAG)
-        add(CHECK_LABELS["lfi_flag"], submitted.get("lfi_flag") == LFI_FLAG)
-        add(CHECK_LABELS["cmdi_flag"], submitted.get("cmdi_flag") == CMDI_FLAG)
-        add(CHECK_LABELS["ssrf_flag"], submitted.get("ssrf_flag") == SSRF_FLAG)
-        add(CHECK_LABELS["backup_flag"], submitted.get("backup_flag") == BACKUP_FLAG)
-        add(CHECK_LABELS["reset_flag"], submitted.get("reset_flag") == RESET_FLAG)
-        add(CHECK_LABELS["ssti_flag"], submitted.get("ssti_flag") == SSTI_FLAG)
-        add(CHECK_LABELS["profile_flag"], submitted.get("profile_flag") == PROFILE_FLAG)
-        add(CHECK_LABELS["report_flag"], submitted.get("report_flag") == REPORT_FLAG)
+        add(CHECK_LABELS["idor_flag"], submitted.get("idor_flag") == lab_flags.get("idor_flag"))
+        add(CHECK_LABELS["lfi_flag"], submitted.get("lfi_flag") == lab_flags.get("lfi_flag"))
+        add(CHECK_LABELS["cmdi_flag"], submitted.get("cmdi_flag") == lab_flags.get("cmdi_flag"))
+        add(CHECK_LABELS["ssrf_flag"], submitted.get("ssrf_flag") == lab_flags.get("ssrf_flag"))
+        add(CHECK_LABELS["backup_flag"], submitted.get("backup_flag") == lab_flags.get("backup_flag"))
+        add(CHECK_LABELS["reset_flag"], submitted.get("reset_flag") == lab_flags.get("reset_flag"))
+        add(CHECK_LABELS["ssti_flag"], submitted.get("ssti_flag") == lab_flags.get("ssti_flag"))
+        add(CHECK_LABELS["profile_flag"], submitted.get("profile_flag") == lab_flags.get("profile_flag"))
+        add(CHECK_LABELS["report_flag"], submitted.get("report_flag") == lab_flags.get("report_flag"))
 
         score = sum(1 for c in checks if c["ok"])
         results = {
@@ -722,7 +968,18 @@ def check():
             "complete": score == len(checks),
         }
 
-    return render_template("check.html", results=results)
+        if game_mode.COPS_AND_ROBBERS:
+            game_mode.check_perp_win(score, len(checks))
+        elif game_mode.TIME_TRIAL:
+            game_mode.record_trial_finish(score, len(checks))
+
+    shared = game_mode.get_check_state() if game_mode.game_mode_active() else None
+    return render_template(
+        "check.html",
+        results=results,
+        shared_check=shared,
+        perp_threshold=game_mode.PERP_WIN_SCORE,
+    )
 
 
 @app.route("/api/status")
@@ -736,10 +993,188 @@ def api_status():
     }
 
 
+# --- Game modes (COPS_AND_ROBBERS=1 or TIME_TRIAL=1) ---
+
+
+@app.route("/game")
+def game_lobby():
+    if not game_mode.game_mode_active():
+        return redirect(url_for("home"))
+    if request.args.get("reset") == "1":
+        game_mode.reset_state()
+        session.pop("game_team", None)
+        session.pop("game_player", None)
+        return redirect(url_for("game_lobby"))
+    return render_template(
+        "game_lobby.html",
+        status=game_mode.public_status(),
+        team=session.get("game_team"),
+        player_name=session.get("game_player"),
+    )
+
+
+@app.route("/game/join", methods=["POST"])
+def game_join():
+    if not game_mode.COPS_AND_ROBBERS:
+        return redirect(url_for("game_lobby"))
+    team = request.form.get("team", "")
+    name = request.form.get("player_name", "").strip() or "player"
+    if team not in ("cop", "perp"):
+        flash("Pick a team.", "error")
+        return redirect(url_for("game_lobby"))
+    session["game_team"] = team
+    session["game_player"] = name
+    session.setdefault("game_session_id", secrets.token_hex(8))
+    game_mode.assign_player_ip(session["game_session_id"], team)
+    flash(f"Joined {'Blue' if team == 'cop' else 'Red'} team as {name}.", "success")
+    return redirect(url_for("game_lobby"))
+
+
+@app.route("/game/cops/setup", methods=["POST"])
+def game_cops_setup():
+    if not game_mode.COPS_AND_ROBBERS or session.get("game_team") != "cop":
+        flash("Cop team setup only.", "error")
+        return redirect(url_for("game_lobby"))
+    count = min(4, max(1, int(request.form.get("admin_count", 1))))
+    password = request.form.get("password", "")
+    if not password:
+        flash("Password required.", "error")
+        return redirect(url_for("game_lobby"))
+
+    db = get_db()
+    for i in range(1, count + 1):
+        username = f"admin{i}"
+        email = f"admin{i}@gmail.com"
+        try:
+            cur = db.execute(
+                "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+                (username, password, "admin"),
+            )
+            db.execute(
+                """
+                INSERT INTO profiles (user_id, email, department, api_key, secret_note)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (cur.lastrowid, email, "IT Security", f"key_{username}", "SOC monitoring account."),
+            )
+        except sqlite3.IntegrityError:
+            pass
+    db.commit()
+    game_mode.get_state().admin_accounts_created = count
+    game_mode.get_state().cops_ready = True
+    game_mode.start_cops_and_robbers()
+    flash(f"Created admin1–admin{count} and started log monitoring.", "success")
+    return redirect(url_for("game_lobby"))
+
+
+@app.route("/game/trial/start", methods=["POST"])
+def game_trial_start():
+    if not game_mode.TIME_TRIAL:
+        return redirect(url_for("game_lobby"))
+    players = int(request.form.get("players", 1))
+    name = request.form.get("player_name", "").strip() or "runner"
+    session["game_team"] = "perp"
+    session["game_player"] = name
+    session.setdefault("game_session_id", secrets.token_hex(8))
+    game_mode.start_time_trial(players)
+    flash("Timer started — go!", "success")
+    return redirect(url_for("home"))
+
+
+@app.route("/game/status")
+def game_status_api():
+    return game_mode.public_status()
+
+
+@app.route("/admin/logs")
+@admin_required
+def admin_logs():
+    if not game_mode.COPS_AND_ROBBERS:
+        flash("Logs are only available in Cops & Robbers mode.", "error")
+        return redirect(url_for("dashboard"))
+    gs = game_mode.get_state()
+    return render_template(
+        "admin_logs.html",
+        logs=gs.logs,
+        alerts=gs.alerts,
+        ban_remaining=max(0, game_mode.ADMIN_BAN_ATTEMPTS - gs.ban_attempts_used),
+        game_over=gs.phase == "finished",
+        winner=gs.winner,
+        win_message=gs.win_message,
+    )
+
+
+@app.route("/admin/logs/ban", methods=["POST"])
+@admin_required
+def admin_logs_ban():
+    if not game_mode.COPS_AND_ROBBERS:
+        return redirect(url_for("dashboard"))
+    ip = request.form.get("ip", "").strip()
+    result = game_mode.attempt_ban(ip)
+    if result.get("message"):
+        flash(result["message"], "error" if not result.get("correct") else "success")
+    elif result.get("error"):
+        flash(result["error"], "error")
+    return redirect(url_for("admin_logs"))
+
+
+@app.route("/admin/logs/clear", methods=["POST"])
+@admin_required
+def admin_logs_clear():
+    if not game_mode.COPS_AND_ROBBERS:
+        return redirect(url_for("dashboard"))
+    game_mode.clear_logs()
+    flash("Real log entries cleared.", "success")
+    return redirect(url_for("admin_logs"))
+
+
+@app.route("/api/check/sync", methods=["GET", "POST"])
+def api_check_sync():
+    if not game_mode.game_mode_active():
+        return {"enabled": False}
+    player = session.get("game_player", "anonymous")
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        field = data.get("field", "")
+        value = data.get("value", "")
+        if field in CHECK_LABELS:
+            game_mode.update_check_field(field, value, player)
+    state = game_mode.get_check_state()
+    status = game_mode.public_status()
+    return {"enabled": True, **state, "game": status}
+
+
 if __name__ == "__main__":
-    if not DB_PATH.exists() or os.environ.get("VULNLAB_RESET") == "1":
-        init_db()
+    cops = os.environ.get("COPS_AND_ROBBERS") == "1"
+    trial = os.environ.get("TIME_TRIAL") == "1"
+    competitive = cops or trial
+    game_mode.configure(cops_and_robbers=cops, time_trial=trial)
+
+    reset = os.environ.get("VULNLAB_RESET") == "1"
+    if reset:
+        lab_flags.bump_epoch()
+        app.secret_key = lab_flags.get_epoch()
+        game_mode.reset_state()
+
+    if competitive and (reset or not lab_flags.VAULT_PATH.exists()):
+        lab_flags.regenerate()
+    else:
+        lab_flags.load(use_vault=competitive and lab_flags.VAULT_PATH.exists())
+
+    empty = competitive
+    if not DB_PATH.exists() or reset:
+        init_db(empty_users=empty)
+
+    if reset:
+        print("  VULNLAB_RESET=1 — all sessions and cookies invalidated.")
+
     port = int(os.environ.get("PORT", 5000))
     print(f"\n  VulnLab running at http://127.0.0.1:{port}")
-    print("  Intentionally vulnerable — local use only.\n")
+    if cops:
+        print("  Mode: COPS & ROBBERS — open /game to set up teams")
+    elif trial:
+        print("  Mode: TIME TRIAL — open /game to start the timer")
+    else:
+        print("  Intentionally vulnerable — local use only.")
+    print()
     app.run(host="127.0.0.1", port=port, debug=True)

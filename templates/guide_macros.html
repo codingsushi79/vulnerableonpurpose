@@ -1,0 +1,26 @@
+{% macro phase_hints(phase_num) %}
+{% if game_active %}
+  {% if phase_num in guide_unlocked %}
+    {{ caller() }}
+  {% elif guide_ready.get(phase_num) %}
+    <div class="guide-hints-locked">
+      <p class="guide-locked-warn">
+        {% if cops_and_robbers %}
+          Unlocking alerts the admins — your IP will get a loud log entry.
+        {% elif time_trial %}
+          Unlocking adds <strong>{{ guide_challenges[phase_num].time_cost }} seconds</strong> to your run time.
+        {% endif %}
+      </p>
+      <form method="post" action="{{ url_for('guide_unlock', phase=phase_num) }}">
+        <button type="submit" class="btn btn-secondary">Unlock step-by-step hints</button>
+      </form>
+    </div>
+  {% else %}
+    <div class="guide-hints-locked">
+      <p><strong>Hints locked.</strong> {{ guide_challenges[phase_num].task }}</p>
+    </div>
+  {% endif %}
+{% else %}
+  {{ caller() }}
+{% endif %}
+{% endmacro %}

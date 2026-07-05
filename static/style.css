@@ -684,3 +684,142 @@ code {
   clip: rect(0, 0, 0, 0);
   border: 0;
 }
+
+/* Game modes */
+.game-banner {
+  margin: 0 0 1rem;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.game-banner-cops {
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+}
+
+.game-banner-perps {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.game-lobby .game-intro {
+  color: var(--muted);
+  margin-bottom: 1.25rem;
+}
+
+.team-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .team-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.btn-team {
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.btn-cop {
+  background: #2563eb;
+}
+
+.btn-perp {
+  background: #dc2626;
+}
+
+.game-setup-form label {
+  display: block;
+  margin-top: 0.75rem;
+}
+
+.logs-panel {
+  max-width: 100%;
+}
+
+.logs-alerts {
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.logs-alerts .alert-critical {
+  color: #b45309;
+  font-weight: 600;
+}
+
+.logs-table-wrap {
+  overflow-x: auto;
+}
+
+.logs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.logs-table th,
+.logs-table td {
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.logs-table tr.log-alert {
+  background: #fef2f2;
+}
+
+.log-ip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.btn-ban {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  background: #991b1b;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.logs-hint {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.check-sync-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-bottom: 1rem;
+}
+
+.sync-editor {
+  font-size: 0.75rem;
+  color: var(--accent);
+  font-weight: normal;
+}
+
+.guide-hints-locked {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.guide-locked-warn {
+  color: #b45309;
+  font-size: 0.9rem;
+}

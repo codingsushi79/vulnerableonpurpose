@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Access Logs — SecureCorp{% endblock %}
+{% block content %}
+<section class="panel logs-panel">
+  <div class="logs-header">
+    <h2>Security access logs</h2>
+    <p class="logs-meta">Live monitoring · Ban attempts remaining: <strong>{{ ban_remaining }}</strong></p>
+    {% if game_over %}
+      <div class="game-banner game-banner-{{ winner }}">{{ win_message }}</div>
+    {% endif %}
+  </div>
+
+  {% if alerts %}
+    <div class="logs-alerts">
+      <h3>Alerts</h3>
+      <ul>
+        {% for alert in alerts %}
+          <li class="{% if 'INTRUSION' in alert %}alert-critical{% endif %}">{{ alert }}</li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+
+  <div class="logs-actions">
+    <form method="post" action="{{ url_for('admin_logs_clear') }}" onsubmit="return confirm('Clear all real log entries?');">
+      <button type="submit" class="btn btn-secondary">Clear logs</button>
+    </form>
+    <p class="logs-hint">Click an IP to full-ban it. Decoy traffic is mixed in — verify before banning.</p>
+  </div>
+
+  <div class="logs-table-wrap">
+    <table class="logs-table">
+      <thead>
+        <tr>
+          <th>Time (UTC)</th>
+          <th>IP</th>
+          <th>User</th>
+          <th>Req</th>
+          <th>Path</th>
+          <th>Detail</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for entry in logs %}
+          <tr class="{% if entry.alert %}log-alert{% endif %}">
+            <td>{{ entry.ts }}</td>
+            <td><code class="log-ip">{{ entry.ip }}</code></td>
+            <td>{{ entry.user }}</td>
+            <td>{{ entry.method }}</td>
+            <td><code>{{ entry.path }}</code></td>
+            <td>{{ entry.detail }}</td>
+            <td>
+              {% if not entry.fake and not game_over %}
+                <form method="post" action="{{ url_for('admin_logs_ban') }}" class="ban-form">
+                  <input type="hidden" name="ip" value="{{ entry.ip }}">
+                  <button type="submit" class="btn-ban" onclick="return confirm('Full-ban {{ entry.ip }}? This uses one of your {{ ban_remaining }} attempts.');">Full-ban IP</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% if not game_over %}
+<script>
+  setTimeout(() => location.reload(), 5000);
+</script>
+{% endif %}
+{% endblock %}

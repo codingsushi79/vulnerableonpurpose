@@ -3,7 +3,7 @@
 {% block content %}
 <section class="panel panel-narrow">
   <h2>Register employee account</h2>
-  <p>Administrator provisioning — creates a portal account and signs you in as the new user.</p>
+  <p>Create a new employee portal account.</p>
 
   <form method="post" action="{{ url_for('admin_register') }}">
     <label for="username">Username</label>
@@ -21,7 +21,7 @@
       <option value="admin">Administrator</option>
     </select>
 
-    <button type="submit">Create account &amp; switch session</button>
+    <button type="submit">Create account</button>
   </form>
 
   <p class="form-footer">

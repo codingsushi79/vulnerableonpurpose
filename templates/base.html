@@ -7,6 +7,12 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  {% if game_finished and game_status.win_message %}
+    <div class="game-banner game-banner-{{ game_status.winner }} wrap">
+      <p>{{ game_status.win_message }}</p>
+    </div>
+  {% endif %}
+
   <header class="site-header">
     <div class="header-inner">
       <div class="brand">

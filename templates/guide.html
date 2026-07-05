@@ -1,11 +1,16 @@
 {% extends "layout_minimal.html" %}
+{% from "guide_macros.html" import phase_hints %}
 {% block title %}Lab Guide — SecureCorp{% endblock %}
 {% block content %}
 <article class="guide">
   <header class="guide-header">
     <h1>SecureCorp Lab Guide</h1>
     <p>Follow the phases in order. Each phase tells you <strong>what to do</strong>, <strong>what to collect</strong>, and has expandable <strong>step-by-step hints</strong> if you get stuck.</p>
+    {% if game_active %}
+    <p class="guide-meta"><strong>Competitive mode:</strong> Solutions are disabled. Hints unlock only after the server verifies each phase challenge{% if cops_and_robbers %} — unlocking alerts admins{% elif time_trial %} — unlocking costs time{% endif %}.</p>
+    {% else %}
     <p class="guide-meta">Hidden pages exist on this lab — you will need to discover them yourself. Expand <strong>Hints</strong> under each phase when stuck.</p>
+    {% endif %}
   </header>
 
   <section class="guide-phase guide-toc">
@@ -47,6 +52,7 @@ VULNLAB_RESET=1 python app.py</pre>
     </div>
     <p class="guide-done"><strong>Done when:</strong> You have found a leaked config file with at least two labeled <code>VULN{...}</code> values and noted paths to revisit later.</p>
 
+    {% call phase_hints(1) %}
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 1</summary>
       <div class="guide-hint-body">
@@ -85,6 +91,7 @@ VULNLAB_RESET=1 python app.py</pre>
         </details>
       </div>
     </details>
+    {% endcall %}
   </section>
 
   <!-- PHASE 2 -->
@@ -106,6 +113,7 @@ VULNLAB_RESET=1 python app.py</pre>
     </div>
     <p class="guide-done"><strong>Done when:</strong> The dashboard shows administrator resources with labeled values you can copy.</p>
 
+    {% call phase_hints(2) %}
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 2</summary>
       <div class="guide-hint-body">
@@ -117,7 +125,6 @@ VULNLAB_RESET=1 python app.py</pre>
             <li>Find the POST request — body looks like: <code>username=...&amp;password=...&amp;role=user</code></li>
             <li>Change <code>role=user</code> to <code>role=admin</code></li>
             <li>Forward/resend the request → you land on dashboard as admin</li>
-            <li>Optional: use <strong>Register employee account</strong> on the dashboard to create a cover identity and auto-switch sessions</li>
             <li>On <code>/check</code>, set Bypass method to <code>hidden role</code></li>
           </ol>
         </details>
@@ -152,6 +159,7 @@ VULNLAB_RESET=1 python app.py</pre>
         </details>
       </div>
     </details>
+    {% endcall %}
   </section>
 
   <!-- PHASE 3 -->
@@ -173,6 +181,7 @@ VULNLAB_RESET=1 python app.py</pre>
     </div>
     <p class="guide-done"><strong>Done when:</strong> You have triggered both reflected and stored XSS at least once.</p>
 
+    {% call phase_hints(3) %}
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 3</summary>
       <div class="guide-hint-body">
@@ -195,6 +204,7 @@ VULNLAB_RESET=1 python app.py</pre>
         </details>
       </div>
     </details>
+    {% endcall %}
   </section>
 
   <!-- PHASE 4 SSTI -->
@@ -213,6 +223,7 @@ VULNLAB_RESET=1 python app.py</pre>
     <div class="guide-collect"><strong>Collect now:</strong> SSTI flag</div>
     <p class="guide-done"><strong>Done when:</strong> You have a labeled SSTI flag value saved.</p>
 
+    {% call phase_hints(4) %}
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 4</summary>
       <div class="guide-hint-body">
@@ -227,6 +238,7 @@ VULNLAB_RESET=1 python app.py</pre>
         </details>
       </div>
     </details>
+    {% endcall %}
   </section>
 
   <!-- PHASE 5 IDOR -->
@@ -245,6 +257,7 @@ VULNLAB_RESET=1 python app.py</pre>
     <div class="guide-collect"><strong>Collect now:</strong> IDOR flag</div>
     <p class="guide-done"><strong>Done when:</strong> You have the labeled IDOR flag from another user's profile.</p>
 
+    {% call phase_hints(5) %}
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 5</summary>
       <div class="guide-hint-body">
@@ -259,6 +272,7 @@ VULNLAB_RESET=1 python app.py</pre>
         </details>
       </div>
     </details>
+    {% endcall %}
   </section>
 
   <!-- PHASE 6 REPORT SQLi -->
@@ -278,6 +292,7 @@ VULNLAB_RESET=1 python app.py</pre>
     <div class="guide-collect"><strong>Collect now:</strong> Report SQLi flag</div>
     <p class="guide-done"><strong>Done when:</strong> The API response includes the report SQLi label.</p>
 
+    {% call phase_hints(6) %}
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 6</summary>
       <div class="guide-hint-body">
@@ -292,6 +307,7 @@ VULNLAB_RESET=1 python app.py</pre>
         </details>
       </div>
     </details>
+    {% endcall %}
   </section>
 
   <!-- PHASE 7 LFI -->
@@ -310,6 +326,7 @@ VULNLAB_RESET=1 python app.py</pre>
     <div class="guide-collect"><strong>Collect now:</strong> LFI flag</div>
     <p class="guide-done"><strong>Done when:</strong> You have the LFI flag and have skimmed deployment-related notes.</p>
 
+    {% call phase_hints(7) %}
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 7</summary>
       <div class="guide-hint-body">
@@ -322,6 +339,7 @@ VULNLAB_RESET=1 python app.py</pre>
         </details>
       </div>
     </details>
+    {% endcall %}
   </section>
 
   <!-- PHASE 8 CMDi -->
@@ -340,6 +358,7 @@ VULNLAB_RESET=1 python app.py</pre>
     <div class="guide-collect"><strong>Collect now:</strong> Command injection flag</div>
     <p class="guide-done"><strong>Done when:</strong> Output shows both your injected command result and the labeled flag.</p>
 
+    {% call phase_hints(8) %}
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 8</summary>
       <div class="guide-hint-body">
@@ -353,6 +372,7 @@ VULNLAB_RESET=1 python app.py</pre>
         </details>
       </div>
     </details>
+    {% endcall %}
   </section>
 
   <!-- PHASE 9 SSRF -->
@@ -372,6 +392,7 @@ VULNLAB_RESET=1 python app.py</pre>
     <div class="guide-collect"><strong>Collect now:</strong> SSRF flag</div>
     <p class="guide-done"><strong>Done when:</strong> You have the SSRF label saved.</p>
 
+    {% call phase_hints(9) %}
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 9</summary>
       <div class="guide-hint-body">
@@ -386,6 +407,7 @@ VULNLAB_RESET=1 python app.py</pre>
         </details>
       </div>
     </details>
+    {% endcall %}
   </section>
 
   <!-- PHASE 10 RESET -->
@@ -404,6 +426,7 @@ VULNLAB_RESET=1 python app.py</pre>
     <div class="guide-collect"><strong>Collect now:</strong> Password reset flag</div>
     <p class="guide-done"><strong>Done when:</strong> Reset page confirms success and shows the labeled flag.</p>
 
+    {% call phase_hints(10) %}
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 10</summary>
       <div class="guide-hint-body">
@@ -418,6 +441,7 @@ VULNLAB_RESET=1 python app.py</pre>
         </details>
       </div>
     </details>
+    {% endcall %}
   </section>
 
   <!-- PHASE 11 PROFILE -->
@@ -436,6 +460,7 @@ VULNLAB_RESET=1 python app.py</pre>
     <div class="guide-collect"><strong>Collect now:</strong> Profile escalation flag</div>
     <p class="guide-done"><strong>Done when:</strong> The profile page confirms escalation and displays the labeled flag.</p>
 
+    {% call phase_hints(11) %}
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 11</summary>
       <div class="guide-hint-body">
@@ -451,6 +476,7 @@ VULNLAB_RESET=1 python app.py</pre>
         </details>
       </div>
     </details>
+    {% endcall %}
   </section>
 
   <!-- PHASE 12 SUBMIT -->
@@ -469,6 +495,7 @@ VULNLAB_RESET=1 python app.py</pre>
 
     <p class="guide-done"><strong>Done when:</strong> The form reports 17/17 complete.</p>
 
+    {% call phase_hints(12) %}
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 12</summary>
       <div class="guide-hint-body">
@@ -482,9 +509,11 @@ VULNLAB_RESET=1 python app.py</pre>
         </details>
       </div>
     </details>
+    {% endcall %}
   </section>
 
   <!-- SOLUTIONS -->
+  {% if not game_active %}
   <section class="guide-phase">
     <h2>Solutions (spoilers)</h2>
     <details class="guide-hints guide-spoilers">
@@ -492,23 +521,29 @@ VULNLAB_RESET=1 python app.py</pre>
       <div class="guide-hint-body">
         <pre class="guide-code">Username: guest (or admin, analyst, anonymous)
 Bypass method: hidden role / sqli / cookie tamper
-Admin password: Sup3rS3cr3t!
-Dashboard flag: VULN{1nt3rc3pt_4nd_1nj3ct}
-Internal token: tok_live_7f3a9c2e
+Admin password: (see dashboard after admin login)
+Dashboard flag: (labeled on admin dashboard)
+Internal token: (labeled on admin dashboard)
 Cookie role: admin
-XSS canary flag: VULN{xss_p4yl0ad_fired}
+XSS canary flag: (in /backup/config.bak)
 Stored XSS: Yes
-SSTI flag: VULN{ssti_t3mplat3}
-IDOR flag: VULN{id0r_us3r_l33k}
-Report SQLi flag: VULN{r3p0rt_sqli}
-LFI flag: VULN{l0cal_f1le_r3ad}
-Command injection flag: VULN{c0mm4nd_1nj3ct}
-SSRF flag: VULN{ssrf_1ntern4l}
-Backup config flag: VULN{b4ckup_expos3d}
-Password reset flag: VULN{w34k_r3s3t_t0k3n}
-Profile escalation flag: VULN{pr0f1l3_3sc4l4te}</pre>
+SSTI flag: (via /search template injection)
+IDOR flag: (via /api/user/ or backup config in competitive mode)
+Report SQLi flag: (via /api/reports injection)
+LFI flag: (in secrets/ via /files)
+Command injection flag: (via /tools/ping)
+SSRF flag: (via /fetch to /internal/health)
+Backup config flag: (in /backup/config.bak)
+Password reset flag: (via forged /reset token)
+Profile escalation flag: (via /profile hidden field)</pre>
       </div>
     </details>
   </section>
+  {% else %}
+  <section class="guide-phase">
+    <h2>Solutions (spoilers)</h2>
+    <p class="guide-meta">Disabled in competitive mode. Flags are randomized each reset — extract them from the app.</p>
+  </section>
+  {% endif %}
 </article>
 {% endblock %}

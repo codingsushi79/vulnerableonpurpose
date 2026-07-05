@@ -2,64 +2,34 @@
 {% block title %}Submission — SecureCorp{% endblock %}
 {% block content %}
 <section class="panel">
+  {% if game_finished and game_status.win_message %}
+    <div class="game-banner game-banner-{{ game_status.winner }}">
+      <p>{{ game_status.win_message }}</p>
+    </div>
+  {% endif %}
+
   <h2>Internal submission form</h2>
-  <p>Enter collected field values below.</p>
+  {% if game_active %}
+    <p>Shared team form — edits sync live. {% if cops_and_robbers %}Score {{ perp_threshold }}+ to win.{% endif %}</p>
+    <div id="check-sync-status" class="check-sync-meta"></div>
+  {% else %}
+    <p>Enter collected field values below.</p>
+  {% endif %}
 
-  <form method="post" action="{{ url_for('check') }}">
-    <label for="username">{{ check_labels.username }}</label>
-    <input id="username" name="username" autocomplete="off">
-
-    <label for="bypass_method">{{ check_labels.bypass_method }}</label>
-    <input id="bypass_method" name="bypass_method" autocomplete="off">
-
-    <label for="admin_password">{{ check_labels.admin_password }}</label>
-    <input id="admin_password" name="admin_password" type="text" autocomplete="off">
-
-    <label for="lab_flag">{{ check_labels.lab_flag }}</label>
-    <input id="lab_flag" name="lab_flag" autocomplete="off">
-
-    <label for="internal_token">{{ check_labels.internal_token }}</label>
-    <input id="internal_token" name="internal_token" autocomplete="off">
-
-    <label for="cookie_role">{{ check_labels.cookie_role }}</label>
-    <input id="cookie_role" name="cookie_role" autocomplete="off">
-
-    <label for="xss_flag">{{ check_labels.xss_flag }}</label>
-    <input id="xss_flag" name="xss_flag" autocomplete="off">
-
-    <label for="stored_xss">{{ check_labels.stored_xss }}</label>
-    <select id="stored_xss" name="stored_xss">
-      <option value="">—</option>
-      <option value="yes">Yes</option>
-      <option value="no">No</option>
-    </select>
-
-    <label for="idor_flag">{{ check_labels.idor_flag }}</label>
-    <input id="idor_flag" name="idor_flag" autocomplete="off">
-
-    <label for="lfi_flag">{{ check_labels.lfi_flag }}</label>
-    <input id="lfi_flag" name="lfi_flag" autocomplete="off">
-
-    <label for="cmdi_flag">{{ check_labels.cmdi_flag }}</label>
-    <input id="cmdi_flag" name="cmdi_flag" autocomplete="off">
-
-    <label for="ssrf_flag">{{ check_labels.ssrf_flag }}</label>
-    <input id="ssrf_flag" name="ssrf_flag" autocomplete="off">
-
-    <label for="backup_flag">{{ check_labels.backup_flag }}</label>
-    <input id="backup_flag" name="backup_flag" autocomplete="off">
-
-    <label for="reset_flag">{{ check_labels.reset_flag }}</label>
-    <input id="reset_flag" name="reset_flag" autocomplete="off">
-
-    <label for="ssti_flag">{{ check_labels.ssti_flag }}</label>
-    <input id="ssti_flag" name="ssti_flag" autocomplete="off">
-
-    <label for="profile_flag">{{ check_labels.profile_flag }}</label>
-    <input id="profile_flag" name="profile_flag" autocomplete="off">
-
-    <label for="report_flag">{{ check_labels.report_flag }}</label>
-    <input id="report_flag" name="report_flag" autocomplete="off">
+  <form method="post" action="{{ url_for('check') }}" id="check-form">
+    {% for key, label in check_labels.items() %}
+      {% if key == 'stored_xss' %}
+        <label for="stored_xss">{{ label }}</label>
+        <select id="stored_xss" name="stored_xss" data-sync-field="stored_xss">
+          <option value="">—</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+      {% else %}
+        <label for="{{ key }}">{{ label }} <span class="sync-editor" data-for="{{ key }}"></span></label>
+        <input id="{{ key }}" name="{{ key }}" data-sync-field="{{ key }}" autocomplete="off">
+      {% endif %}
+    {% endfor %}
 
     <button type="submit">Submit</button>
   </form>
@@ -78,11 +48,68 @@
 
       <p class="score">
         Score: {{ results.score }} / {{ results.total }}
-        {% if results.complete %}
+        {% if cops_and_robbers and results.score >= perp_threshold %}
+          — Perp threshold reached.
+        {% elif results.complete %}
           — Complete.
         {% endif %}
       </p>
     </div>
   {% endif %}
 </section>
+
+{% if game_active %}
+<script>
+(function () {
+  const form = document.getElementById('check-form');
+  const statusEl = document.getElementById('check-sync-status');
+  let syncTimer = null;
+
+  function applyState(data) {
+    if (!data.enabled) return;
+    const draft = data.draft || {};
+    const editors = data.editors || {};
+    form.querySelectorAll('[data-sync-field]').forEach(el => {
+      const field = el.dataset.syncField;
+      if (draft[field] !== undefined && document.activeElement !== el) {
+        el.value = draft[field];
+      }
+      const ed = document.querySelector('.sync-editor[data-for="' + field + '"]');
+      if (ed && editors[field]) {
+        ed.textContent = '(' + editors[field] + ')';
+      }
+    });
+    if (data.game && data.game.phase === 'finished') {
+      statusEl.textContent = data.game.win_message || 'Game over.';
+    }
+  }
+
+  function pushField(field, value) {
+    fetch('{{ url_for("api_check_sync") }}', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({field, value})
+    }).catch(() => {});
+  }
+
+  function pull() {
+    fetch('{{ url_for("api_check_sync") }}')
+      .then(r => r.json())
+      .then(applyState)
+      .catch(() => {});
+  }
+
+  form.querySelectorAll('[data-sync-field]').forEach(el => {
+    el.addEventListener('input', () => {
+      clearTimeout(syncTimer);
+      syncTimer = setTimeout(() => pushField(el.dataset.syncField, el.value), 300);
+    });
+    el.addEventListener('change', () => pushField(el.dataset.syncField, el.value));
+  });
+
+  pull();
+  setInterval(pull, 2000);
+})();
+</script>
+{% endif %}
 {% endblock %}

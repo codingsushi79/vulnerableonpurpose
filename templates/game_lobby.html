@@ -1,0 +1,80 @@
+{% extends "layout_minimal.html" %}
+{% block title %}Game Lobby — SecureCorp{% endblock %}
+{% block content %}
+<section class="panel game-lobby">
+  <h1>{% if time_trial %}Time Trial{% else %}Cops &amp; Robbers{% endif %}</h1>
+
+  {% if status.phase == 'finished' %}
+    <div class="game-banner game-banner-{{ status.winner }}">
+      <p>{{ status.win_message }}</p>
+      <p><a href="{{ url_for('game_lobby') }}?reset=1">Start new round</a></p>
+    </div>
+  {% elif status.phase == 'active' %}
+    <div class="notice">
+      {% if time_trial %}
+        <p>Time trial in progress — {{ status.trial_players }} player(s). Timer running.</p>
+        {% if status.trial_elapsed %}
+          <p>Elapsed: <strong>{{ (status.trial_elapsed / 60)|round(1) }} min</strong>
+          · Target: <strong>{{ (status.trial_par_seconds / 60)|round(1) }} min</strong></p>
+        {% endif %}
+      {% else %}
+        <p>Game live. {% if team == 'cop' %}Monitor <a href="{{ url_for('admin_logs') }}">access logs</a>.{% else %}Extract secrets and submit on <a href="{{ url_for('check') }}">/check</a>.{% endif %}</p>
+        <p>Perps win at {{ status.perp_win_threshold }}+ correct on /check. Cops get {{ status.ban_attempts_remaining }} ban attempt(s).</p>
+      {% endif %}
+      <p><a href="{{ url_for('home') }}">Enter portal</a></p>
+    </div>
+  {% else %}
+    {% if cops_and_robbers %}
+      <p class="game-intro">Admins watch logs and ban the attacker (2 guesses). Robbers race to score {{ status.perp_win_threshold }}+ on <code>/check</code>. Some log traffic is decoy.</p>
+
+      {% if team == 'cop' %}
+        <h2>Blue team — setup</h2>
+        <p>Create admin accounts (admin1, admin2, …). Each cop should use a different account.</p>
+        <form method="post" action="{{ url_for('game_cops_setup') }}" class="game-setup-form">
+          <label for="admin_count">Number of admin accounts</label>
+          <select id="admin_count" name="admin_count">
+            {% for n in range(1, 5) %}
+              <option value="{{ n }}">{{ n }}</option>
+            {% endfor %}
+          </select>
+          <label for="password">Shared initial password for all admin accounts</label>
+          <input id="password" name="password" type="password" required>
+          <button type="submit">Create accounts &amp; start monitoring</button>
+        </form>
+      {% elif team == 'perp' %}
+        <h2>Red team — waiting</h2>
+        <p>You're on the attacker team{% if player_name %} as <strong>{{ player_name }}</strong>{% endif %}.</p>
+        <p>Wait for admins to start monitoring, then <a href="{{ url_for('home') }}">enter the portal</a> and begin.</p>
+      {% else %}
+        <h2>Choose your team</h2>
+        <div class="team-grid">
+          <form method="post" action="{{ url_for('game_join') }}">
+            <input type="hidden" name="team" value="cop">
+            <label>Display name <input name="player_name" placeholder="Admin lead" required></label>
+            <button type="submit" class="btn-team btn-cop">Join Blue Team (Cops)</button>
+          </form>
+          <form method="post" action="{{ url_for('game_join') }}">
+            <input type="hidden" name="team" value="perp">
+            <label>Display name <input name="player_name" placeholder="Operator 1" required></label>
+            <button type="submit" class="btn-team btn-perp">Join Red Team (Robbers)</button>
+          </form>
+        </div>
+      {% endif %}
+    {% endif %}
+
+    {% if time_trial %}
+      <p class="game-intro">Cooperative timed run — 1–5 players, no admins. Beat the par time; target gets faster each clear.</p>
+      <form method="post" action="{{ url_for('game_trial_start') }}" class="game-setup-form">
+        <label for="players">Players (1–5)</label>
+        <select id="players" name="players">
+          {% for n in range(1, 6) %}
+            <option value="{{ n }}">{{ n }}</option>
+          {% endfor %}
+        </select>
+        <label>Your name <input name="player_name" placeholder="Runner 1" required></label>
+        <button type="submit">Start timer</button>
+      </form>
+    {% endif %}
+  {% endif %}
+</section>
+{% endblock %}
