@@ -3,5 +3,4 @@ __pycache__/
 *.pyc
 vulnlab.db
 secrets/
-host_fs/
 .env

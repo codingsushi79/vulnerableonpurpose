@@ -10,9 +10,9 @@ The `/guide` page is not linked from the portal. Bookmark it while you work.
 
 ## Overview
 
-Complete **19 checks** on the hidden submission form at `/check`. The guide walks you through 13 phases:
+Complete **17 checks** on the hidden submission form at `/check`. The guide walks you through 12 phases:
 
-1. Recon · 2. Login & admin · 3. XSS · 4. SSTI · 5. IDOR · 6. Report SQLi · 7. LFI · 8. CMDi · 9. SSRF · 10. Password reset · 11. Profile escalation · 12. Host shell + root · 13. Submit
+1. Recon · 2. Login & admin · 3. XSS · 4. SSTI · 5. IDOR · 6. Report SQLi · 7. LFI · 8. CMDi · 9. SSRF · 10. Password reset · 11. Profile escalation · 12. Submit
 
 Each phase includes what to collect, when you're done, and expandable step-by-step hints.
 
@@ -39,7 +39,6 @@ Open **http://127.0.0.1:5000** and **http://127.0.0.1:5000/guide**.
 | **SSTI** (`/search?q={{ssti_flag}}`) | Server-side template injection |
 | **Profile page** (`/profile`) | Hidden field tampering (like login) |
 | **Report API** (`/api/reports?dept=`) | Second SQL injection vector |
-| **Host console** (`/sys/console`) | Post-exploitation shell + sudo privesc |
 
 ---
 

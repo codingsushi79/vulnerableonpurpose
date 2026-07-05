@@ -1,0 +1,1 @@
+Mar  4 09:12:01 securecorp-web sudo: www-data : TTY=unknown ; PWD=/var/www/securecorp ; USER=root ; COMMAND=/bin/cat /root/flag.txt

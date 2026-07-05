@@ -1,0 +1,7 @@
+www-data shell — post-compromise notes
+--------------------------------------
+User proof: cat home/www-data/user_flag.txt
+  (Host shell flag)
+Root: sudo cat root/flag.txt  (NOPASSWD configured)
+  (Host root flag)
+Real host: commands also run in host_fs/ — try ls, cat, find

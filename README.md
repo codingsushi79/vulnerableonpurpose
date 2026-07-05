@@ -42,8 +42,7 @@ See **[GUIDE.md](GUIDE.md)** for the walkthrough. Open **http://127.0.0.1:5000/g
 | `/reset` | Weak predictable reset tokens |
 | `/robots.txt`, `/backup/config.bak` | Information disclosure |
 | `/internal/health` | Internal-only data (reach via SSRF) |
-| `/sys/console` | Hidden web shell — host compromise |
-| `/check` | Validate all 19 findings |
+| `/check` | Validate all 17 findings |
 
 ## License
 

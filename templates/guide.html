@@ -9,12 +9,11 @@
   </header>
 
   <section class="guide-phase guide-toc">
-    <h2>Progress checklist — 19 items</h2>
+    <h2>Progress checklist — 17 items</h2>
     <p>Every labeled value you find maps to a field on the hidden submission form. Collect these as you go:</p>
     <div class="checklist-grid">
       <div><strong>Auth</strong> Username · Bypass method · Admin password · Dashboard flag · Internal token · Cookie role</div>
       <div><strong>Web attacks</strong> XSS canary · Stored XSS (yes) · IDOR · LFI · CMDi · SSRF · Backup flag · Reset flag · SSTI · Profile flag · Report SQLi</div>
-      <div><strong>Host</strong> Host shell flag · Host root flag</div>
     </div>
   </section>
 
@@ -56,7 +55,7 @@ VULNLAB_RESET=1 python app.py</pre>
           <ol>
             <li>Go to <code>http://127.0.0.1:5000/robots.txt</code></li>
             <li>Read the <code>Disallow:</code> lines — these are paths the site owner tried to hide</li>
-            <li>Note <code>/backup/</code>, <code>/backup/config.bak</code>, <code>/internal/</code>, <code>/sys/</code>, <code>/api/user/</code>, <code>/api/reports</code></li>
+            <li>Note <code>/backup/</code>, <code>/backup/config.bak</code>, <code>/internal/</code>, <code>/api/user/</code>, <code>/api/reports</code></li>
           </ol>
         </details>
         <details>
@@ -74,7 +73,7 @@ VULNLAB_RESET=1 python app.py</pre>
             <li>Sign in first (guest credentials are in the login page source)</li>
             <li>Click <strong>Documents</strong> in the nav (or go to <code>/documents</code>)</li>
             <li>Click each filename — they open in <code>/files?name=...</code></li>
-            <li>Read <code>deployment_notes.txt</code> — it explains host access (Phase 12)</li>
+            <li>Read <code>deployment_notes.txt</code> — it notes the network diagnostics tool runs shell commands</li>
           </ol>
         </details>
         <details>
@@ -366,11 +365,11 @@ VULNLAB_RESET=1 python app.py</pre>
       <li>Find the internal health URL from configuration you leaked in Phase 1.</li>
       <li>Locate the server-side URL fetch feature (linked from network tools).</li>
       <li>Submit the internal URL so the <strong>server</strong> requests it — not your browser directly.</li>
-      <li>Save the SSRF flag and any host console token returned in the same response.</li>
+      <li>Save the SSRF flag from the internal health response.</li>
     </ol>
 
-    <div class="guide-collect"><strong>Collect now:</strong> SSRF flag · host console token</div>
-    <p class="guide-done"><strong>Done when:</strong> You have both the SSRF label and a console access token saved.</p>
+    <div class="guide-collect"><strong>Collect now:</strong> SSRF flag</div>
+    <p class="guide-done"><strong>Done when:</strong> You have the SSRF label saved.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 9</summary>
@@ -380,8 +379,8 @@ VULNLAB_RESET=1 python app.py</pre>
           <ol>
             <li>From backup config copy: <code>http://127.0.0.1:5000/internal/health</code></li>
             <li>Go to URL Preview (<code>/fetch</code>) or: <code>/fetch?url=http://127.0.0.1:5000/internal/health</code></li>
-            <li>The <strong>server</strong> fetches it — you see JSON with <code>ssrf_flag</code> and <code>host_console_token</code></li>
-            <li>Save both — you need the token for Phase 11</li>
+            <li>The <strong>server</strong> fetches it — you see JSON with <code>ssrf_flag</code></li>
+            <li>Copy the SSRF flag value for <code>/check</code></li>
           </ol>
         </details>
       </div>
@@ -453,43 +452,10 @@ VULNLAB_RESET=1 python app.py</pre>
     </details>
   </section>
 
-  <!-- PHASE 12 HOST -->
+  <!-- PHASE 12 SUBMIT -->
   <section class="guide-phase">
-    <h2>Phase 12 — Host compromise (shell + root)</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Use the console token to get a shell, then escalate to root on the host.</p>
-
-    <div class="guide-tools"><strong>Tools:</strong> Browser · host console token from Phase 9 · built-in shell commands (<code>ls</code> <code>cat</code> <code>sudo</code>)</div>
-
-    <ol class="guide-steps">
-      <li>Use the console token from the SSRF response to access the hidden system console.</li>
-      <li>Run <code>help</code> and explore the filesystem with basic shell commands.</li>
-      <li>Read the user-level proof file, then find a way to read root's flag.</li>
-    </ol>
-
-    <div class="guide-collect"><strong>Collect now:</strong> Host shell flag · Host root flag</div>
-    <p class="guide-done"><strong>Done when:</strong> You have both host flags saved.</p>
-
-    <details class="guide-hints">
-      <summary>Step-by-step hints — Phase 12</summary>
-      <div class="guide-hint-body">
-        <details open>
-          <summary>Full walkthrough</summary>
-          <ol>
-            <li><code>http://127.0.0.1:5000/sys/console?token=c0ns0l3_t0k_8e1a4f</code> (replace with your token)</li>
-            <li>Type <code>ls</code> to browse the simulated filesystem</li>
-            <li><code>cat home/www-data/user_flag.txt</code> → host shell flag</li>
-            <li><code>cat home/www-data/notes.txt</code> → explains sudo privesc</li>
-            <li><code>sudo cat root/flag.txt</code> → host root flag</li>
-          </ol>
-        </details>
-      </div>
-    </details>
-  </section>
-
-  <!-- PHASE 13 SUBMIT -->
-  <section class="guide-phase">
-    <h2>Phase 13 — Submit everything</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Enter all 19 labeled values on the hidden submission form and score full marks.</p>
+    <h2>Phase 12 — Submit everything</h2>
+    <p class="guide-goal"><strong>Goal:</strong> Enter all 17 labeled values on the hidden submission form and score full marks.</p>
 
     <div class="guide-tools"><strong>Tools:</strong> Browser · your collected notes from every prior phase</div>
 
@@ -500,10 +466,10 @@ VULNLAB_RESET=1 python app.py</pre>
       <li>Submit and review the pass/fail breakdown.</li>
     </ol>
 
-    <p class="guide-done"><strong>Done when:</strong> The form reports 19/19 complete.</p>
+    <p class="guide-done"><strong>Done when:</strong> The form reports 17/17 complete.</p>
 
     <details class="guide-hints">
-      <summary>Step-by-step hints — Phase 13</summary>
+      <summary>Step-by-step hints — Phase 12</summary>
       <div class="guide-hint-body">
         <details open>
           <summary>Submission form</summary>
@@ -521,7 +487,7 @@ VULNLAB_RESET=1 python app.py</pre>
   <section class="guide-phase">
     <h2>Solutions (spoilers)</h2>
     <details class="guide-hints guide-spoilers">
-      <summary>All 19 flags — click to reveal</summary>
+      <summary>All 17 flags — click to reveal</summary>
       <div class="guide-hint-body">
         <pre class="guide-code">Username: guest (or admin, analyst, anonymous)
 Bypass method: hidden role / sqli / cookie tamper
@@ -539,9 +505,7 @@ Command injection flag: VULN{c0mm4nd_1nj3ct}
 SSRF flag: VULN{ssrf_1ntern4l}
 Backup config flag: VULN{b4ckup_expos3d}
 Password reset flag: VULN{w34k_r3s3t_t0k3n}
-Profile escalation flag: VULN{pr0f1l3_3sc4l4te}
-Host shell flag: VULN{sh3ll_4cc3ss}
-Host root flag: VULN{r00t_0n_b0x}</pre>
+Profile escalation flag: VULN{pr0f1l3_3sc4l4te}</pre>
       </div>
     </details>
   </section>

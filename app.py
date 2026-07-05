@@ -33,7 +33,6 @@ from markupsafe import Markup
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "vulnlab.db"
 SECRETS_DIR = APP_DIR / "secrets"
-HOST_FS = APP_DIR / "host_fs"
 
 # Hard-coded secrets students should discover via recon / exploitation
 ADMIN_PASSWORD = "Sup3rS3cr3t!"
@@ -46,9 +45,6 @@ CMDI_FLAG = "VULN{c0mm4nd_1nj3ct}"
 SSRF_FLAG = "VULN{ssrf_1ntern4l}"
 BACKUP_FLAG = "VULN{b4ckup_expos3d}"
 RESET_FLAG = "VULN{w34k_r3s3t_t0k3n}"
-HOST_CONSOLE_TOKEN = "c0ns0l3_t0k_8e1a4f"
-HOST_USER_FLAG = "VULN{sh3ll_4cc3ss}"
-HOST_ROOT_FLAG = "VULN{r00t_0n_b0x}"
 SSTI_FLAG = "VULN{ssti_t3mplat3}"
 PROFILE_FLAG = "VULN{pr0f1l3_3sc4l4te}"
 REPORT_FLAG = "VULN{r3p0rt_sqli}"
@@ -69,8 +65,6 @@ CHECK_LABELS = {
     "ssrf_flag": "SSRF flag",
     "backup_flag": "Backup config flag",
     "reset_flag": "Password reset flag",
-    "host_user_flag": "Host shell flag",
-    "host_root_flag": "Host root flag",
     "ssti_flag": "SSTI flag",
     "profile_flag": "Profile escalation flag",
     "report_flag": "Report SQLi flag",
@@ -111,7 +105,6 @@ def close_db(_exc):
 
 def init_db():
     SECRETS_DIR.mkdir(exist_ok=True)
-    init_host_fs()
     (SECRETS_DIR / "backup_flag.txt").write_text(
         f"CONFIDENTIAL BACKUP\n"
         f"{check_tag('lfi_flag')}: {LFI_FLAG}\n",
@@ -124,10 +117,8 @@ def init_db():
         "SecureCorp portal deployment notes\n"
         "---------------------------------\n"
         "App process user: www-data\n"
-        "Emergency sysconsole (internal only):\n"
-        "  GET /sys/console?token=<host_console_token from /internal/health>\n"
-        "Host layout mirrored at host_fs/ for break-glass recovery.\n"
-        "See home/www-data/notes.txt on the host after shell access.\n",
+        "Internal health URL is set in backup config (INTERNAL_HEALTH_URL).\n"
+        "Network diagnostics tool invokes /bin/ping via shell — restrict in prod.\n",
         encoding="utf-8",
     )
 
@@ -199,106 +190,6 @@ def init_db():
     )
     db.commit()
     db.close()
-
-
-def init_host_fs():
-    """Simulated host filesystem for post-exploitation shell practice."""
-    dirs = [
-        HOST_FS / "home" / "www-data",
-        HOST_FS / "root",
-        HOST_FS / "etc",
-        HOST_FS / "var" / "log",
-    ]
-    for d in dirs:
-        d.mkdir(parents=True, exist_ok=True)
-
-    (HOST_FS / "home" / "www-data" / "notes.txt").write_text(
-        "www-data shell — post-compromise notes\n"
-        "--------------------------------------\n"
-        f"User proof: cat home/www-data/user_flag.txt\n"
-        f"  ({check_tag('host_user_flag')})\n"
-        "Root: sudo cat root/flag.txt  (NOPASSWD configured)\n"
-        f"  ({check_tag('host_root_flag')})\n"
-        "Real host: commands also run in host_fs/ — try ls, cat, find\n",
-        encoding="utf-8",
-    )
-    (HOST_FS / "home" / "www-data" / "user_flag.txt").write_text(
-        f"{check_tag('host_user_flag')}: {HOST_USER_FLAG}\n", encoding="utf-8"
-    )
-    (HOST_FS / "root" / "flag.txt").write_text(
-        f"{check_tag('host_root_flag')}: {HOST_ROOT_FLAG}\n", encoding="utf-8"
-    )
-    (HOST_FS / "etc" / "passwd").write_text(
-        "root:x:0:0:root:/root:/bin/bash\n"
-        "www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin\n",
-        encoding="utf-8",
-    )
-    (HOST_FS / "var" / "log" / "auth.log").write_text(
-        "Mar  4 09:12:01 securecorp-web sudo: www-data : TTY=unknown ; "
-        "PWD=/var/www/securecorp ; USER=root ; COMMAND=/bin/cat /root/flag.txt\n",
-        encoding="utf-8",
-    )
-
-
-def console_authed() -> bool:
-    return session.get("console_authed") is True
-
-
-def authenticate_console(token: str | None) -> bool:
-    if token == HOST_CONSOLE_TOKEN:
-        session["console_authed"] = True
-        return True
-    return console_authed()
-
-
-def execute_console_command(cmd: str) -> str:
-    cmd = cmd.strip()
-    if not cmd:
-        return ""
-
-    if cmd == "help":
-        return (
-            "Built-ins: help, whoami, id, pwd, uname\n"
-            "Browse: ls, cat, find, grep\n"
-            "Privesc: sudo cat root/flag.txt\n"
-            "Hint: you are www-data with passwordless sudo for cat on /root/flag.txt"
-        )
-
-    if cmd == "whoami":
-        return "www-data"
-    if cmd == "id":
-        return "uid=33(www-data) gid=33(www-data) groups=33(www-data)"
-    if cmd == "pwd":
-        return "/var/www/securecorp"
-    if cmd.startswith("uname"):
-        return "Linux securecorp-web 5.15.0-91-generic #1 SMP x86_64 GNU/Linux"
-
-    if cmd.startswith("sudo "):
-        inner = cmd[5:].strip()
-        if inner in ("cat root/flag.txt", "cat /root/flag.txt"):
-            try:
-                return (HOST_FS / "root" / "flag.txt").read_text(encoding="utf-8")
-            except OSError as exc:
-                return str(exc)
-        return f"sudo: www-data is not allowed to execute '{inner}'"
-
-    try:
-        completed = subprocess.run(
-            cmd,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=5,
-            cwd=str(HOST_FS),
-        )
-        output = completed.stdout + completed.stderr
-        if not output.strip():
-            output = f"(exit {completed.returncode})"
-        return output.rstrip()
-    except subprocess.TimeoutExpired:
-        return "Command timed out."
-    except OSError as exc:
-        return str(exc)
 
 
 def decode_session_cookie(raw: str | None) -> dict:
@@ -649,36 +540,13 @@ def fetch_url():
 
 @app.route("/internal/health")
 def internal_health():
-    port = request.environ.get("SERVER_PORT", "5000")
     return {
         "status": "ok",
         "environment": "internal",
         "ssrf_flag": SSRF_FLAG,
         "ssrf_flag_check_label": CHECK_LABELS["ssrf_flag"],
-        "host_console_token": HOST_CONSOLE_TOKEN,
-        "host_console_url": f"http://127.0.0.1:{port}/sys/console?token={HOST_CONSOLE_TOKEN}",
         "message": "Internal health check — not for external callers.",
     }
-
-
-@app.route("/sys/console", methods=["GET", "POST"])
-def sys_console():
-    token = request.args.get("token", "")
-    if not authenticate_console(token):
-        return (
-            "403 Forbidden — valid host console token required. "
-            "Obtain token from internal services only.",
-            403,
-        )
-
-    history = session.get("console_history", [])
-    if request.method == "POST":
-        cmd = request.form.get("cmd", "")
-        output = execute_console_command(cmd)
-        history = history + [{"cmd": cmd, "output": output}]
-        session["console_history"] = history[-20:]
-
-    return render_template("console.html", history=history)
 
 
 @app.route("/reset", methods=["GET", "POST"])
@@ -707,7 +575,6 @@ def robots():
 Disallow: /backup/
 Disallow: /backup/config.bak
 Disallow: /internal/
-Disallow: /sys/
 Disallow: /api/user/
 Disallow: /api/reports
 Disallow: /secrets/
@@ -775,8 +642,6 @@ def check():
         add(CHECK_LABELS["ssrf_flag"], submitted.get("ssrf_flag") == SSRF_FLAG)
         add(CHECK_LABELS["backup_flag"], submitted.get("backup_flag") == BACKUP_FLAG)
         add(CHECK_LABELS["reset_flag"], submitted.get("reset_flag") == RESET_FLAG)
-        add(CHECK_LABELS["host_user_flag"], submitted.get("host_user_flag") == HOST_USER_FLAG)
-        add(CHECK_LABELS["host_root_flag"], submitted.get("host_root_flag") == HOST_ROOT_FLAG)
         add(CHECK_LABELS["ssti_flag"], submitted.get("ssti_flag") == SSTI_FLAG)
         add(CHECK_LABELS["profile_flag"], submitted.get("profile_flag") == PROFILE_FLAG)
         add(CHECK_LABELS["report_flag"], submitted.get("report_flag") == REPORT_FLAG)
@@ -804,11 +669,7 @@ def api_status():
 
 
 if __name__ == "__main__":
-    if (
-        not DB_PATH.exists()
-        or not HOST_FS.exists()
-        or os.environ.get("VULNLAB_RESET") == "1"
-    ):
+    if not DB_PATH.exists() or os.environ.get("VULNLAB_RESET") == "1":
         init_db()
     port = int(os.environ.get("PORT", 5000))
     print(f"\n  VulnLab running at http://127.0.0.1:{port}")
