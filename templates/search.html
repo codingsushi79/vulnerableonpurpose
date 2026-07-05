@@ -9,7 +9,12 @@
     <button type="submit">Search</button>
   </form>
 
-  {% if raw_query %}
+  {% if ssti_result is not none %}
+    <div class="search-results">
+      <p>Template preview:</p>
+      <div>{{ ssti_result }}</div>
+    </div>
+  {% elif raw_query %}
     <div class="search-results">
       <p>Showing results for <strong>{{ query }}</strong></p>
     </div>

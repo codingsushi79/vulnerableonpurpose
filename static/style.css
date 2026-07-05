@@ -575,6 +575,90 @@ code {
   color: var(--warn);
 }
 
+.guide-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 0.5rem;
+}
+
+.guide-goal {
+  background: #eff6ff;
+  border-left: 3px solid var(--accent);
+  padding: 0.65rem 0.85rem;
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 1rem;
+}
+
+.guide-steps {
+  margin: 0 0 1rem;
+  padding-left: 1.35rem;
+}
+
+.guide-steps li {
+  margin-bottom: 0.45rem;
+}
+
+.guide-collect {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+}
+
+.guide-done {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: 0;
+}
+
+.checklist-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.checklist-grid strong {
+  color: var(--text);
+}
+
+.guide-toc {
+  background: #f8fafc;
+}
+
+.doc-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.doc-list li {
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-list li:last-child {
+  border-bottom: none;
+}
+
+.guide-hint-body details[open] > summary {
+  color: var(--accent);
+}
+
+.guide-hint-body ol {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.guide-hint-body ol li {
+  margin-bottom: 0.35rem;
+}
+
 /* System console */
 .console-panel {
   padding: 0;

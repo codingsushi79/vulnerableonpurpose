@@ -23,6 +23,7 @@ from flask import (
     make_response,
     redirect,
     render_template,
+    render_template_string,
     request,
     session,
     url_for,
@@ -48,6 +49,9 @@ RESET_FLAG = "VULN{w34k_r3s3t_t0k3n}"
 HOST_CONSOLE_TOKEN = "c0ns0l3_t0k_8e1a4f"
 HOST_USER_FLAG = "VULN{sh3ll_4cc3ss}"
 HOST_ROOT_FLAG = "VULN{r00t_0n_b0x}"
+SSTI_FLAG = "VULN{ssti_t3mplat3}"
+PROFILE_FLAG = "VULN{pr0f1l3_3sc4l4te}"
+REPORT_FLAG = "VULN{r3p0rt_sqli}"
 
 # Labels match the /check form — shown when each value is discovered
 CHECK_LABELS = {
@@ -67,6 +71,9 @@ CHECK_LABELS = {
     "reset_flag": "Password reset flag",
     "host_user_flag": "Host shell flag",
     "host_root_flag": "Host root flag",
+    "ssti_flag": "SSTI flag",
+    "profile_flag": "Profile escalation flag",
+    "report_flag": "Report SQLi flag",
 }
 
 app = Flask(__name__)
@@ -427,8 +434,69 @@ def logout():
 @app.route("/search")
 def search():
     query = request.args.get("q", "")
-    # Reflected XSS — rendered unsafely in template
-    return render_template("search.html", query=Markup(query), raw_query=query)
+    ssti_result = None
+    if query and ("{{" in query or "{%" in query):
+        try:
+            ssti_result = render_template_string(
+                query,
+                ssti_flag=SSTI_FLAG,
+                check_tag=check_tag,
+            )
+        except Exception as exc:
+            ssti_result = f"Template error: {exc}"
+    return render_template(
+        "search.html",
+        query=Markup(query),
+        raw_query=query,
+        ssti_result=ssti_result,
+    )
+
+
+@app.route("/documents")
+def documents():
+    docs = [
+        {"name": "backup_flag.txt", "title": "Backup archive"},
+        {"name": "deployment_notes.txt", "title": "Deployment notes"},
+        {"name": "employee_records.txt", "title": "Employee records (restricted)"},
+    ]
+    return render_template("documents.html", docs=docs)
+
+
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    ident = current_identity()
+    message = None
+    email = ident.get("username", "") + "@securecorp.local"
+    if request.method == "POST":
+        email = request.form.get("email", email)
+        access_level = request.form.get("access_level", "standard")
+        if access_level == "admin":
+            message = f"Profile elevated. {check_tag('profile_flag')}: {PROFILE_FLAG}"
+        else:
+            message = "Profile saved successfully."
+    return render_template("profile.html", identity=ident, email=email, message=message)
+
+
+@app.route("/api/reports")
+def api_reports():
+    dept = request.args.get("dept", "")
+    db = get_db()
+    query = (
+        "SELECT u.username, p.department FROM users u "
+        "JOIN profiles p ON p.user_id = u.id "
+        f"WHERE p.department = '{dept}'"
+    )
+    try:
+        rows = db.execute(query).fetchall()
+    except sqlite3.Error as exc:
+        return {"error": str(exc)}, 500
+    reports = [{"username": r["username"], "department": r["department"]} for r in rows]
+    payload = {"reports": reports, "count": len(reports)}
+    if len(reports) >= 3:
+        payload["report_flag"] = REPORT_FLAG
+        payload["report_flag_label"] = check_tag("report_flag")
+    return payload
 
 
 @app.route("/feedback", methods=["GET", "POST"])
@@ -504,8 +572,15 @@ def files():
             "SecureCorp document viewer\n"
             "Specify a filename to retrieve archived files.\n"
         )
-    # Path traversal — no canonicalization
-    target = SECRETS_DIR / name
+    # Path traversal — resolves paths but must stay inside secrets/
+    secrets_root = SECRETS_DIR.resolve()
+    target = (SECRETS_DIR / name).resolve()
+    try:
+        target.relative_to(secrets_root)
+    except ValueError:
+        return "Could not open: access denied", 403
+    if target.suffix.lower() == ".py":
+        return "Could not open: file type not allowed", 403
     try:
         return target.read_text(encoding="utf-8")
     except OSError:
@@ -625,6 +700,7 @@ Disallow: /backup/
 Disallow: /internal/
 Disallow: /sys/
 Disallow: /api/user/
+Disallow: /api/reports
 Disallow: /secrets/
 """
     return app.response_class(body, mimetype="text/plain")
@@ -692,6 +768,9 @@ def check():
         add(CHECK_LABELS["reset_flag"], submitted.get("reset_flag") == RESET_FLAG)
         add(CHECK_LABELS["host_user_flag"], submitted.get("host_user_flag") == HOST_USER_FLAG)
         add(CHECK_LABELS["host_root_flag"], submitted.get("host_root_flag") == HOST_ROOT_FLAG)
+        add(CHECK_LABELS["ssti_flag"], submitted.get("ssti_flag") == SSTI_FLAG)
+        add(CHECK_LABELS["profile_flag"], submitted.get("profile_flag") == PROFILE_FLAG)
+        add(CHECK_LABELS["report_flag"], submitted.get("report_flag") == REPORT_FLAG)
 
         score = sum(1 for c in checks if c["ok"])
         results = {

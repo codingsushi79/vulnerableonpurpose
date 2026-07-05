@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}My Profile — SecureCorp{% endblock %}
+{% block content %}
+<section class="panel panel-narrow">
+  <h2>My Profile</h2>
+  <p>Signed in as <strong>{{ identity.username }}</strong></p>
+
+  <form method="post" action="{{ url_for('profile') }}">
+    <label for="email">Work email</label>
+    <input id="email" name="email" value="{{ email }}">
+
+    <input type="hidden" name="access_level" value="standard">
+
+    <button type="submit">Save changes</button>
+  </form>
+
+  {% if message %}
+    <div class="notice" style="margin-top: 1rem">{{ message }}</div>
+  {% endif %}
+</section>
+{% endblock %}

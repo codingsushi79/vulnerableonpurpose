@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Documents — SecureCorp{% endblock %}
+{% block content %}
+<section class="panel">
+  <h2>Company Documents</h2>
+  <p>Archived files available through the internal document viewer.</p>
+  <ul class="doc-list">
+    {% for doc in docs %}
+      <li>
+        <strong>{{ doc.title }}</strong>
+        — <a href="{{ url_for('files', name=doc.name) }}">{{ doc.name }}</a>
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endblock %}

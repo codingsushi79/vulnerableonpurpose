@@ -30,7 +30,10 @@ See **[GUIDE.md](GUIDE.md)** for the walkthrough. Open **http://127.0.0.1:5000/g
 | `/login` | SQL injection, hidden field tampering, user enumeration |
 | Session / cookies | Unsigned base64 cookie override |
 | `/dashboard` | Broken access control → primary flags |
-| `/search` | Reflected XSS |
+| `/documents` | Document archive → leads to file viewer |
+| `/profile` | Hidden field privilege escalation |
+| `/search` | Reflected XSS + SSTI |
+| `/api/reports` | SQL injection on department filter |
 | `/feedback` | Stored XSS |
 | `/api/user/<id>` | IDOR — enumerate sequential IDs |
 | `/files` | Local file inclusion / path traversal |
@@ -40,7 +43,7 @@ See **[GUIDE.md](GUIDE.md)** for the walkthrough. Open **http://127.0.0.1:5000/g
 | `/robots.txt`, `/backup/config.bak` | Information disclosure |
 | `/internal/health` | Internal-only data (reach via SSRF) |
 | `/sys/console` | Hidden web shell — host compromise |
-| `/check` | Validate all 16 findings |
+| `/check` | Validate all 19 findings |
 
 ## License
 

@@ -1,21 +1,20 @@
 # SecureCorp Lab Guide
 
-Open the interactive guide in your browser — hints use clickable dropdowns:
+Open the interactive guide in your browser — full walkthrough with step-by-step hint dropdowns:
 
 **http://127.0.0.1:5000/guide**
 
-The `/guide` page is not linked from the portal. Bookmark it for reference while you work.
+The `/guide` page is not linked from the portal. Bookmark it while you work.
 
 ---
 
-## What you will practice
+## Overview
 
-- Mapping a web application without an obvious challenge list
-- Intercepting and modifying HTTP traffic
-- Authentication bypass, session abuse, and privilege escalation
-- Client-side and server-side injection flaws
-- Collecting labeled findings and submitting them for scoring
-- Post-exploitation: web shell access and privilege escalation on the host
+Complete **19 checks** on the hidden submission form at `/check`. The guide walks you through 13 phases:
+
+1. Recon · 2. Login & admin · 3. XSS · 4. SSTI · 5. IDOR · 6. Report SQLi · 7. LFI · 8. CMDi · 9. SSRF · 10. Password reset · 11. Profile escalation · 12. Host shell + root · 13. Submit
+
+Each phase includes what to collect, when you're done, and expandable step-by-step hints.
 
 ---
 
@@ -28,25 +27,19 @@ pip install -r requirements.txt
 VULNLAB_RESET=1 python app.py
 ```
 
-Open **http://127.0.0.1:5000** and treat it like a real internal portal.
+Open **http://127.0.0.1:5000** and **http://127.0.0.1:5000/guide**.
 
 ---
 
-## Recommended tools
+## New in this version
 
-| Tool | Use for |
-|------|---------|
-| **Browser DevTools** | Page source, network log, cookies |
-| **Burp Suite / OWASP ZAP** | Intercepting and editing requests |
-| **curl** | Repeating requests and probing APIs |
-
----
-
-## How to use this guide
-
-Each phase in `/guide` gives you a **goal**, **steps**, and a **done when** checkpoint. Specific endpoints, payloads, and answers are inside **Hints** dropdowns — click to expand only when you need them.
-
-The submission form at `/check` is not linked on the site. Find it yourself or use the Phase 9 hint.
+| Feature | What it teaches |
+|---------|-----------------|
+| **Company Documents** (`/documents`) | Finding files → LFI path |
+| **SSTI** (`/search?q={{ssti_flag}}`) | Server-side template injection |
+| **Profile page** (`/profile`) | Hidden field tampering (like login) |
+| **Report API** (`/api/reports?dept=`) | Second SQL injection vector |
+| **Host console** (`/sys/console`) | Post-exploitation shell + sudo privesc |
 
 ---
 

