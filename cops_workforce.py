@@ -32,6 +32,35 @@ EMPLOYEE_NAMES: list[tuple[str, str, str]] = [
     ("Samuel", "Lopez", "Support"),
     ("Tanya", "Ng", "Finance"),
     ("Victor", "Walsh", "Marketing"),
+    ("Alex", "Turner", "Engineering"),
+    ("Beth", "Cooper", "Sales"),
+    ("Carl", "Fischer", "Finance"),
+    ("Diana", "Morales", "HR"),
+    ("Ethan", "Brooks", "SOC"),
+    ("Fiona", "Reed", "Legal"),
+    ("George", "Hayes", "IT"),
+    ("Helen", "Scott", "Operations"),
+    ("Ian", "Murphy", "Support"),
+    ("Jasmine", "Cole", "Marketing"),
+    ("Kyle", "Barnes", "Engineering"),
+    ("Laura", "Perry", "Finance"),
+    ("Marcus", "Hayes", "Sales"),
+    ("Nina", "Foster", "HR"),
+    ("Oscar", "Grant", "SOC"),
+    ("Paula", "Dunn", "Legal"),
+    ("Ryan", "Coleman", "IT"),
+    ("Sara", "Blake", "Operations"),
+    ("Tyler", "Mason", "Support"),
+    ("Uma", "Chandra", "Engineering"),
+    ("Vince", "Harper", "Finance"),
+    ("Wendy", "Stone", "Sales"),
+    ("Xavier", "Pope", "Marketing"),
+    ("Yolanda", "Reyes", "HR"),
+    ("Zach", "Ingram", "SOC"),
+    ("Aaron", "Vance", "Legal"),
+    ("Bianca", "Lowe", "IT"),
+    ("Caleb", "Nash", "Operations"),
+    ("Derek", "Silva", "Support"),
 ]
 
 DECOY_PASSWORD = "Welcome2026!"
@@ -73,13 +102,18 @@ def _assign_office_ips(usernames: list[str]) -> dict[str, str]:
     return {username: rnd.choice(OFFICE_IP_POOL) for username in usernames}
 
 
+def sample_workforce_names() -> list[tuple[str, str, str]]:
+    n = random.randint(20, 30)
+    return random.sample(EMPLOYEE_NAMES, n)
+
+
 def seed_cops_workforce(
     db: sqlite3.Connection,
     admin_count: int,
     admin_password: str,
 ) -> dict[str, str]:
     roster: list[tuple[str, str, str, str, str, str]] = []
-    for username, email, dept, first, last in _unique_identities(EMPLOYEE_NAMES):
+    for username, email, dept, first, last in _unique_identities(sample_workforce_names()):
         display = f"{first} {last}"
         roster.append((username, email, dept, "user", DECOY_PASSWORD, display))
 
@@ -87,7 +121,7 @@ def seed_cops_workforce(
         roster.append(
             (
                 f"admin{i}",
-                f"admin{i}@gmail.com",
+                f"admin{i}@securecorp.local",
                 "IT Security",
                 "admin",
                 admin_password,

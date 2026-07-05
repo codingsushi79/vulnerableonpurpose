@@ -23,11 +23,13 @@ from flask import (
     Flask,
     flash,
     g,
+    jsonify,
     make_response,
     redirect,
     render_template,
     render_template_string,
     request,
+    send_file,
     session,
     url_for,
 )
@@ -37,6 +39,7 @@ import cops_workforce
 import game as game_mode
 import guide_challenges
 import lab_flags
+import sensitive_pdfs
 
 APP_DIR = Path(__file__).resolve().parent
 DB_PATH = APP_DIR / "vulnlab.db"
@@ -61,6 +64,8 @@ CHECK_LABELS = {
     "ssti_flag": "SSTI flag",
     "profile_flag": "Profile escalation flag",
     "report_flag": "Report SQLi flag",
+    "pdf_board_sha256": "Board memo PDF SHA256",
+    "pdf_acquisition_sha256": "Acquisition brief PDF SHA256",
 }
 
 app = Flask(__name__)
@@ -140,9 +145,11 @@ def init_db(*, empty_users: bool = False):
         "---------------------------------\n"
         "App process user: www-data\n"
         "Internal health URL is set in backup config (INTERNAL_HEALTH_URL).\n"
-        "Network diagnostics tool invokes /bin/ping via shell — restrict in prod.\n",
+        "Network diagnostics tool invokes /bin/ping via shell — restrict in prod.\n"
+        "Confidential PDFs: board_memo.pdf, acquisition_target.pdf (internal archive).\n",
         encoding="utf-8",
     )
+    sensitive_pdfs.write_sensitive_pdfs(SECRETS_DIR)
 
     db = sqlite3.connect(DB_PATH)
     db.executescript(
@@ -618,6 +625,8 @@ def documents():
         {"name": "backup_flag.txt", "title": "Backup archive"},
         {"name": "deployment_notes.txt", "title": "Deployment notes"},
         {"name": "employee_records.txt", "title": "Employee records (restricted)"},
+        {"name": "board_memo.pdf", "title": "Board strategy memo (confidential PDF)"},
+        {"name": "acquisition_target.pdf", "title": "Acquisition target brief (confidential PDF)"},
     ]
     return render_template("documents.html", docs=docs)
 
@@ -753,6 +762,9 @@ def files():
         return "Could not open: access denied", 403
     if target.suffix.lower() == ".py":
         return "Could not open: file type not allowed", 403
+    if target.suffix.lower() == ".pdf":
+        guide_mark("lfi_read")
+        return send_file(target, mimetype="application/pdf")
     try:
         return target.read_text(encoding="utf-8")
     except OSError:
@@ -974,6 +986,17 @@ def check():
         add(CHECK_LABELS["ssti_flag"], submitted.get("ssti_flag") == lab_flags.get("ssti_flag"))
         add(CHECK_LABELS["profile_flag"], submitted.get("profile_flag") == lab_flags.get("profile_flag"))
         add(CHECK_LABELS["report_flag"], submitted.get("report_flag") == lab_flags.get("report_flag"))
+        pdf_hashes = sensitive_pdfs.pdf_hashes_from_disk(SECRETS_DIR)
+        add(
+            CHECK_LABELS["pdf_board_sha256"],
+            submitted.get("pdf_board_sha256", "").lower()
+            == pdf_hashes.get("pdf_board_sha256", "").lower(),
+        )
+        add(
+            CHECK_LABELS["pdf_acquisition_sha256"],
+            submitted.get("pdf_acquisition_sha256", "").lower()
+            == pdf_hashes.get("pdf_acquisition_sha256", "").lower(),
+        )
 
         score = sum(1 for c in checks if c["ok"])
         results = {
@@ -1062,11 +1085,7 @@ def game_cops_setup():
     game_mode.get_state().admin_accounts_created = count
     game_mode.get_state().cops_ready = True
     game_mode.start_cops_and_robbers(user_ip_map=ip_map, perp_ip=perp_ip)
-    flash(
-        f"Provisioned {len(cops_workforce.EMPLOYEE_NAMES) + count} employee accounts "
-        f"(including admin1–admin{count}) and started log monitoring.",
-        "success",
-    )
+    flash("Log monitoring started.", "success")
     return redirect(url_for("game_lobby"))
 
 
@@ -1089,6 +1108,24 @@ def game_status_api():
     return game_mode.public_status()
 
 
+@app.route("/api/admin/logs")
+@admin_required
+def api_admin_logs():
+    if not game_mode.COPS_AND_ROBBERS:
+        return jsonify({"error": "unavailable"}), 404
+    gs = game_mode.get_state()
+    return jsonify(
+        {
+            "logs": game_mode.logs_snapshot(tick=True),
+            "alerts": gs.alerts,
+            "ban_remaining": max(0, game_mode.ADMIN_BAN_ATTEMPTS - gs.ban_attempts_used),
+            "game_over": gs.phase == "finished",
+            "winner": gs.winner,
+            "win_message": gs.win_message,
+        }
+    )
+
+
 @app.route("/admin/logs")
 @admin_required
 def admin_logs():
@@ -1096,9 +1133,10 @@ def admin_logs():
         flash("Logs are only available in Cops & Robbers mode.", "error")
         return redirect(url_for("dashboard"))
     gs = game_mode.get_state()
+    game_mode.tick_live_logs()
     return render_template(
         "admin_logs.html",
-        logs=gs.logs,
+        logs=game_mode.logs_snapshot(tick=False),
         alerts=gs.alerts,
         ban_remaining=max(0, game_mode.ADMIN_BAN_ATTEMPTS - gs.ban_attempts_used),
         game_over=gs.phase == "finished",
@@ -1114,6 +1152,9 @@ def admin_logs_ban():
         return redirect(url_for("dashboard"))
     ip = request.form.get("ip", "").strip()
     result = game_mode.attempt_ban(ip)
+    wants_json = request.headers.get("X-Requested-With") == "fetch"
+    if wants_json:
+        return jsonify(result)
     if result.get("message"):
         flash(result["message"], "error" if not result.get("correct") else "success")
     elif result.get("error"):
@@ -1127,6 +1168,9 @@ def admin_logs_clear():
     if not game_mode.COPS_AND_ROBBERS:
         return redirect(url_for("dashboard"))
     game_mode.clear_logs()
+    wants_json = request.headers.get("X-Requested-With") == "fetch"
+    if wants_json:
+        return jsonify({"ok": True})
     flash("Real log entries cleared.", "success")
     return redirect(url_for("admin_logs"))
 
@@ -1180,4 +1224,4 @@ if __name__ == "__main__":
     else:
         print("  Intentionally vulnerable — local use only.")
     print()
-    app.run(host="127.0.0.1", port=port, debug=True)
+    app.run(host="127.0.0.1", port=port, debug=True, use_reloader=not competitive)

@@ -92,6 +92,84 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
 
+LIVE_LOG_PATHS = [
+    ("/home", "GET", "Home page"),
+    ("/dashboard", "GET", "Dashboard view"),
+    ("/documents", "GET", "Document archive"),
+    ("/search?q=org+chart", "GET", "Directory search"),
+    ("/feedback", "GET", "Feedback portal"),
+    ("/api/status", "GET", "Status probe"),
+    ("/login", "POST", "Login attempt — success"),
+    ("/login", "POST", "Login attempt — invalid password"),
+    ("/tools/ping", "GET", "Network tools page"),
+    ("/profile", "GET", "Profile view"),
+    ("/api/reports?dept=SOC", "GET", "Department report export"),
+    ("/files?name=readme.txt", "GET", "Document open"),
+    ("/files?name=board_memo.pdf", "GET", "Confidential PDF access"),
+    ("/reset", "GET", "Password reset page"),
+]
+
+
+def _ts_sort_key(entry: LogEntry):
+    try:
+        return datetime.strptime(entry.ts.replace(" UTC", ""), "%Y-%m-%d %H:%M:%S").replace(
+            tzinfo=timezone.utc
+        )
+    except ValueError:
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+
+def log_entry_to_dict(entry: LogEntry) -> dict:
+    return {
+        "ts": entry.ts,
+        "ip": entry.ip,
+        "method": entry.method,
+        "path": entry.path,
+        "user": entry.user,
+        "detail": entry.detail,
+        "fake": entry.fake,
+        "alert": entry.alert,
+    }
+
+
+def _tick_live_logs_unlocked() -> None:
+    if not COPS_AND_ROBBERS or _state.phase != "active":
+        return
+    usernames = list(_state.user_ip_map.keys()) or ["jdoe"]
+    pool = _state.office_ip_pool or [f"192.168.47.{n}" for n in range(100, 128)]
+    for _ in range(random.randint(1, 3)):
+        user = random.choice(usernames)
+        ip = _state.user_ip_map.get(user, random.choice(pool))
+        path, method, detail = random.choice(LIVE_LOG_PATHS)
+        _state.logs.insert(
+            0,
+            LogEntry(
+                ts=_now(),
+                ip=ip,
+                method=method,
+                path=path,
+                user=user,
+                detail=detail,
+                fake=True,
+            ),
+        )
+    if len(_state.logs) > 300:
+        del _state.logs[300:]
+
+
+def tick_live_logs() -> None:
+    with _lock:
+        _tick_live_logs_unlocked()
+
+
+def logs_snapshot(*, tick: bool = True) -> list[dict]:
+    with _lock:
+        if tick:
+            _tick_live_logs_unlocked()
+        ordered = sorted(_state.logs, key=_ts_sort_key, reverse=True)
+        return [log_entry_to_dict(e) for e in ordered]
+
+
 def _pick_perp_ip() -> str:
     """Believable LAN address — blends with decoy 192.168.x traffic."""
     return f"192.168.{random.randint(1, 254)}.{random.randint(2, 250)}"
@@ -165,8 +243,7 @@ def start_cops_and_robbers(
             _state.perp_team_ip = _pick_perp_ip()
         for sid in list(_state.perp_player_ips.keys()):
             _state.perp_player_ips[sid] = _state.perp_team_ip
-        _state.logs = _fake_log_pool(_state.user_ip_map)
-        random.shuffle(_state.logs)
+        _state.logs = sorted(_fake_log_pool(_state.user_ip_map), key=_ts_sort_key, reverse=True)
         _state.alerts = [
             "Monitoring active. Review access logs for anomalous activity.",
             "Baseline traffic includes internal 192.168.x hosts — not every entry is suspicious.",
@@ -237,7 +314,8 @@ def log_request(
     if not COPS_AND_ROBBERS or _state.phase != "active":
         return
     with _lock:
-        _state.logs.append(
+        _state.logs.insert(
+            0,
             LogEntry(
                 ts=_now(),
                 ip=ip,
@@ -247,7 +325,7 @@ def log_request(
                 detail=detail,
                 fake=False,
                 alert=alert,
-            )
+            ),
         )
 
 
@@ -267,6 +345,7 @@ def log_admin_intrusion(ip: str, username: str) -> None:
 def clear_logs() -> None:
     with _lock:
         _state.logs = [e for e in _state.logs if e.fake]
+        _state.logs.sort(key=_ts_sort_key, reverse=True)
         _state.alerts = ["Logs cleared — decoy baseline traffic retained."]
 
 

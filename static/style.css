@@ -784,6 +784,21 @@ code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+.btn-ip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  padding: 0.2rem 0.45rem;
+  background: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-ip:hover {
+  background: #dbeafe;
+}
+
 .btn-ban {
   font-size: 0.75rem;
   padding: 0.25rem 0.5rem;
@@ -792,6 +807,48 @@ code {
   border: none;
   border-radius: 4px;
   cursor: pointer;
+}
+
+.log-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.log-modal[hidden] {
+  display: none;
+}
+
+.log-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.log-modal-card {
+  position: relative;
+  background: #fff;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  max-width: 420px;
+  width: calc(100% - 2rem);
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.2);
+}
+
+.log-modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.25rem;
+}
+
+.btn-danger {
+  background: #991b1b;
+  color: #fff;
+  border: none;
 }
 
 .logs-hint {

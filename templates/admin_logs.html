@@ -4,27 +4,23 @@
 <section class="panel logs-panel">
   <div class="logs-header">
     <h2>Security access logs</h2>
-    <p class="logs-meta">Live monitoring · Ban attempts remaining: <strong>{{ ban_remaining }}</strong></p>
-    {% if game_over %}
-      <div class="game-banner game-banner-{{ winner }}">{{ win_message }}</div>
-    {% endif %}
+    <p class="logs-meta">Live monitoring · Ban attempts remaining: <strong id="ban-remaining">{{ ban_remaining }}</strong></p>
+    <div id="game-over-banner" class="game-banner{% if game_over %} game-banner-{{ winner }}{% endif %}"{% if not game_over %} hidden{% endif %}>
+      {{ win_message }}
+    </div>
   </div>
 
-  {% if alerts %}
-    <div class="logs-alerts">
-      <h3>Alerts</h3>
-      <ul>
-        {% for alert in alerts %}
-          <li class="{% if 'INTRUSION' in alert %}alert-critical{% endif %}">{{ alert }}</li>
-        {% endfor %}
-      </ul>
-    </div>
-  {% endif %}
+  <div id="logs-alerts" class="logs-alerts{% if not alerts %} hidden{% endif %}">
+    <h3>Alerts</h3>
+    <ul id="alerts-list">
+      {% for alert in alerts %}
+        <li class="{% if 'INTRUSION' in alert %}alert-critical{% endif %}">{{ alert }}</li>
+      {% endfor %}
+    </ul>
+  </div>
 
   <div class="logs-actions">
-    <form method="post" action="{{ url_for('admin_logs_clear') }}" onsubmit="return confirm('Clear all real log entries?');">
-      <button type="submit" class="btn btn-secondary">Clear logs</button>
-    </form>
+    <button type="button" id="clear-logs-btn" class="btn btn-secondary">Clear logs</button>
     <p class="logs-hint">Click an IP to full-ban it. Decoy traffic is mixed in — verify before banning.</p>
   </div>
 
@@ -38,35 +34,168 @@
           <th>Req</th>
           <th>Path</th>
           <th>Detail</th>
-          <th></th>
         </tr>
       </thead>
-      <tbody>
+      <tbody id="logs-body">
         {% for entry in logs %}
           <tr class="{% if entry.alert %}log-alert{% endif %}">
             <td>{{ entry.ts }}</td>
-            <td><code class="log-ip">{{ entry.ip }}</code></td>
+            <td>
+              {% if not game_over %}
+                <button type="button" class="btn-ip" data-ip="{{ entry.ip }}">{{ entry.ip }}</button>
+              {% else %}
+                <code class="log-ip">{{ entry.ip }}</code>
+              {% endif %}
+            </td>
             <td>{{ entry.user }}</td>
             <td>{{ entry.method }}</td>
             <td><code>{{ entry.path }}</code></td>
             <td>{{ entry.detail }}</td>
-            <td>
-              {% if not entry.fake and not game_over %}
-                <form method="post" action="{{ url_for('admin_logs_ban') }}" class="ban-form">
-                  <input type="hidden" name="ip" value="{{ entry.ip }}">
-                  <button type="submit" class="btn-ban" onclick="return confirm('Full-ban {{ entry.ip }}? This uses one of your {{ ban_remaining }} attempts.');">Full-ban IP</button>
-                </form>
-              {% endif %}
-            </td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 </section>
-{% if not game_over %}
+
+<div id="ban-modal" class="log-modal" hidden>
+  <div class="log-modal-backdrop"></div>
+  <div class="log-modal-card" role="dialog" aria-labelledby="ban-modal-title">
+    <h3 id="ban-modal-title">Full-ban IP address?</h3>
+    <p id="ban-modal-text"></p>
+    <div class="log-modal-actions">
+      <button type="button" class="btn btn-secondary" id="ban-modal-cancel">Cancel</button>
+      <button type="button" class="btn btn-danger" id="ban-modal-confirm">Full-ban IP</button>
+    </div>
+  </div>
+</div>
+
 <script>
-  setTimeout(() => location.reload(), 5000);
+(function () {
+  const logsBody = document.getElementById('logs-body');
+  const banRemainingEl = document.getElementById('ban-remaining');
+  const alertsWrap = document.getElementById('logs-alerts');
+  const alertsList = document.getElementById('alerts-list');
+  const gameOverBanner = document.getElementById('game-over-banner');
+  const clearBtn = document.getElementById('clear-logs-btn');
+  const banModal = document.getElementById('ban-modal');
+  const banModalText = document.getElementById('ban-modal-text');
+  const banModalCancel = document.getElementById('ban-modal-cancel');
+  const banModalConfirm = document.getElementById('ban-modal-confirm');
+  let pendingBanIp = null;
+  let gameOver = {{ 'true' if game_over else 'false' }};
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function renderLogs(logs) {
+    logsBody.innerHTML = logs.map(entry => {
+      const rowClass = entry.alert ? 'log-alert' : '';
+      const ipCell = !gameOver
+        ? `<button type="button" class="btn-ip" data-ip="${esc(entry.ip)}">${esc(entry.ip)}</button>`
+        : `<code class="log-ip">${esc(entry.ip)}</code>`;
+      return `<tr class="${rowClass}">
+        <td>${esc(entry.ts)}</td>
+        <td>${ipCell}</td>
+        <td>${esc(entry.user)}</td>
+        <td>${esc(entry.method)}</td>
+        <td><code>${esc(entry.path)}</code></td>
+        <td>${esc(entry.detail)}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  function renderAlerts(alerts) {
+    if (!alerts.length) {
+      alertsWrap.hidden = true;
+      return;
+    }
+    alertsWrap.hidden = false;
+    alertsList.innerHTML = alerts.map(a => {
+      const cls = a.includes('INTRUSION') ? 'alert-critical' : '';
+      return `<li class="${cls}">${esc(a)}</li>`;
+    }).join('');
+  }
+
+  function openBanModal(ip) {
+    pendingBanIp = ip;
+    const remaining = banRemainingEl.textContent.trim();
+    banModalText.textContent = `Ban ${ip}? This uses one of your ${remaining} remaining attempt(s).`;
+    banModal.hidden = false;
+  }
+
+  function closeBanModal() {
+    pendingBanIp = null;
+    banModal.hidden = true;
+  }
+
+  async function banIp(ip) {
+    const fd = new FormData();
+    fd.append('ip', ip);
+    const resp = await fetch('{{ url_for("admin_logs_ban") }}', {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: {'X-Requested-With': 'fetch'},
+    });
+    return resp.json();
+  }
+
+  async function clearLogs() {
+    if (!confirm('Clear all real log entries? Decoy traffic will remain.')) return;
+    await fetch('{{ url_for("admin_logs_clear") }}', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {'X-Requested-With': 'fetch'},
+    });
+    refreshLogs();
+  }
+
+  async function refreshLogs() {
+    try {
+      const resp = await fetch('{{ url_for("api_admin_logs") }}', {credentials: 'same-origin'});
+      if (!resp.ok) return;
+      const data = await resp.json();
+      renderLogs(data.logs || []);
+      renderAlerts(data.alerts || []);
+      banRemainingEl.textContent = data.ban_remaining;
+      if (data.game_over) {
+        gameOver = true;
+        gameOverBanner.hidden = false;
+        gameOverBanner.textContent = data.win_message || '';
+        gameOverBanner.className = 'game-banner game-banner-' + (data.winner || '');
+        clearBtn.disabled = true;
+      }
+    } catch (_) {}
+  }
+
+  logsBody.addEventListener('click', (e) => {
+    const btn = e.target.closest('.btn-ip');
+    if (btn && !gameOver) openBanModal(btn.dataset.ip);
+  });
+
+  banModalCancel.addEventListener('click', closeBanModal);
+  banModal.querySelector('.log-modal-backdrop').addEventListener('click', closeBanModal);
+  banModalConfirm.addEventListener('click', async () => {
+    if (!pendingBanIp) return;
+    const ip = pendingBanIp;
+    closeBanModal();
+    const result = await banIp(ip);
+    await refreshLogs();
+    if (result.message && !result.game_over) {
+      alert(result.message);
+    }
+  });
+
+  clearBtn.addEventListener('click', clearLogs);
+
+  refreshLogs();
+  setInterval(refreshLogs, 2000);
+})();
 </script>
-{% endif %}
 {% endblock %}
