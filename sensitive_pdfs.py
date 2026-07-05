@@ -120,32 +120,48 @@ PDF_FILES = {
 }
 
 
+def _normalize_pdf_text(text: str) -> str:
+    """Map Unicode punctuation to Latin-1-safe characters for PDF Type1 fonts."""
+    replacements = {
+        "\u2014": "-",  # em dash
+        "\u2013": "-",  # en dash
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u2026": "...",
+    }
+    for src, dst in replacements.items():
+        text = text.replace(src, dst)
+    # "CONFIDENTIAL - Acquisition" not "CONFIDENTIAL  -  Acquisition"
+    while "  " in text:
+        text = text.replace("  ", " ")
+    return text.replace(" - ", " - ")
+
+
 def _escape_pdf_text(text: str) -> str:
     return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
 
 def build_text_pdf(title: str, paragraphs: list[str]) -> bytes:
-    lines: list[str] = [title, ""]
+    lines: list[str] = [_normalize_pdf_text(title), ""]
     for para in paragraphs:
         if not para.strip():
             lines.append("")
             continue
-        lines.extend(textwrap.wrap(para, width=90) or [""])
+        lines.extend(textwrap.wrap(_normalize_pdf_text(para), width=90) or [""])
 
     lines_per_page = 52
     page_chunks = [lines[i : i + lines_per_page] for i in range(0, len(lines), lines_per_page)]
+    num_pages = len(page_chunks)
 
-    objects: list[bytes] = []
-    page_obj_ids: list[int] = []
-    content_obj_ids: list[int] = []
-    font_obj_id = 5 + (len(page_chunks) - 1) * 2
+    page_obj_ids = [3 + 2 * i for i in range(num_pages)]
+    content_obj_ids = [4 + 2 * i for i in range(num_pages)]
+    font_obj_id = 3 + 2 * num_pages
 
-    for page_idx, chunk in enumerate(page_chunks):
-        page_obj_id = 3 + page_idx * 2
-        content_obj_id = page_obj_id + 1
-        page_obj_ids.append(page_obj_id)
-        content_obj_ids.append(content_obj_id)
+    objects: dict[int, bytes] = {}
 
+    for chunk, content_id in zip(page_chunks, content_obj_ids):
         content_lines = ["BT", "/F1 11 Tf", "50 750 Td"]
         first = True
         for line in chunk:
@@ -153,44 +169,46 @@ def build_text_pdf(title: str, paragraphs: list[str]) -> bytes:
                 first = False
             else:
                 content_lines.append("0 -14 Td")
-            content_lines.append(f"({_escape_pdf_text(line)}) Tj")
+            content_lines.append(f"({_escape_pdf_text(line)}) Tj")  # lines already normalized
         content_lines.append("ET")
         stream = "\n".join(content_lines).encode("latin-1", errors="replace")
-        objects.append(
-            f"{content_obj_id} 0 obj<< /Length {len(stream)} >>stream\n".encode()
+        objects[content_id] = (
+            f"{content_id} 0 obj<< /Length {len(stream)} >>stream\n".encode()
             + stream
             + b"\nendstream\nendobj\n"
         )
 
-    objects.insert(0, b"1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\n")
+    for page_id, content_id in zip(page_obj_ids, content_obj_ids):
+        objects[page_id] = (
+            f"{page_id} 0 obj<< /Type /Page /Parent 2 0 R "
+            f"/MediaBox [0 0 612 792] /Contents {content_id} 0 R "
+            f"/Resources << /Font << /F1 {font_obj_id} 0 R >> >> >>endobj\n"
+        ).encode()
+
     kids = " ".join(f"{pid} 0 R" for pid in page_obj_ids)
-    objects.insert(1, f"2 0 obj<< /Type /Pages /Kids [{kids}] /Count {len(page_obj_ids)} >>endobj\n".encode())
+    objects[2] = (
+        f"2 0 obj<< /Type /Pages /Kids [{kids}] /Count {num_pages} >>endobj\n"
+    ).encode()
+    objects[1] = b"1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\n"
+    objects[font_obj_id] = (
+        f"{font_obj_id} 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj\n"
+    ).encode()
 
-    page_objects: list[bytes] = []
-    for page_idx, page_obj_id in enumerate(page_obj_ids):
-        content_obj_id = content_obj_ids[page_idx]
-        page_objects.append(
-            f"{page_obj_id} 0 obj<< /Type /Page /Parent 2 0 R "
-            f"/MediaBox [0 0 612 792] /Contents {content_obj_id} 0 R "
-            f"/Resources << /Font << /F1 {font_obj_id} 0 R >> >> >>endobj\n".encode()
-        )
-    objects.extend(page_objects)
-    objects.append(
-        f"{font_obj_id} 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj\n".encode()
-    )
-
+    max_obj_id = font_obj_id
     pdf = bytearray(b"%PDF-1.4\n")
     offsets = [0]
-    for obj in objects:
+    for obj_id in range(1, max_obj_id + 1):
         offsets.append(len(pdf))
-        pdf.extend(obj)
+        pdf.extend(objects[obj_id])
+
     xref_start = len(pdf)
-    pdf.extend(f"xref\n0 {len(offsets)}\n".encode())
+    pdf.extend(f"xref\n0 {max_obj_id + 1}\n".encode())
     pdf.extend(b"0000000000 65535 f \n")
     for off in offsets[1:]:
         pdf.extend(f"{off:010d} 00000 n \n".encode())
     pdf.extend(
-        f"trailer<< /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref_start}\n%%EOF\n".encode()
+        f"trailer<< /Size {max_obj_id + 1} /Root 1 0 R >>\n"
+        f"startxref\n{xref_start}\n%%EOF\n".encode()
     )
     return bytes(pdf)
 

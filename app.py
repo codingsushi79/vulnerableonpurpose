@@ -762,9 +762,11 @@ def files():
         return "Could not open: access denied", 403
     if target.suffix.lower() == ".py":
         return "Could not open: file type not allowed", 403
+    if not target.is_file():
+        return f"Could not open: {name}", 404
     if target.suffix.lower() == ".pdf":
         guide_mark("lfi_read")
-        return send_file(target, mimetype="application/pdf")
+        return send_file(target, mimetype="application/pdf", download_name=target.name)
     try:
         return target.read_text(encoding="utf-8")
     except OSError:
@@ -1252,6 +1254,9 @@ if __name__ == "__main__":
     empty = cops  # time trial keeps default users (guest, analyst, admin)
     if not DB_PATH.exists() or reset:
         init_db(empty_users=empty)
+    else:
+        SECRETS_DIR.mkdir(exist_ok=True)
+        sensitive_pdfs.write_sensitive_pdfs(SECRETS_DIR)
 
     if reset:
         print("  VULNLAB_RESET=1 — all sessions and cookies invalidated.")
