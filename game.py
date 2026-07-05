@@ -60,6 +60,8 @@ class GameState:
     alerts: list[str] = field(default_factory=list)
     logs: list[LogEntry] = field(default_factory=list)
     admin_accounts_created: int = 0
+    user_ip_map: dict[str, str] = field(default_factory=dict)
+    office_ip_pool: list[str] = field(default_factory=list)
 
     # Shared /check form (multiplayer perps)
     check_draft: dict[str, str] = field(default_factory=dict)
@@ -95,38 +97,21 @@ def _pick_perp_ip() -> str:
     return f"192.168.{random.randint(1, 254)}.{random.randint(2, 250)}"
 
 
-def _fake_log_pool() -> list[LogEntry]:
-    """Generate believable background noise including many 192.168 addresses."""
+def _fake_log_pool(user_ip_map: dict[str, str] | None = None) -> list[LogEntry]:
+    """Generate believable background noise using workforce usernames and office IPs."""
     rnd = random.Random(42)
-    fake_ips = [
-        "192.168.1.10",
-        "192.168.1.11",
-        "192.168.1.12",
-        "192.168.1.45",
-        "192.168.1.78",
-        "192.168.4.22",
-        "192.168.4.23",
-        "192.168.10.5",
-        "192.168.10.6",
-        "192.168.47.100",
-        "192.168.47.101",
-        "192.168.47.102",
-        "192.168.47.103",
-        "192.168.47.104",
-        "192.168.47.105",
-        "192.168.47.106",
-        "192.168.47.107",
-        "192.168.47.108",
-        "192.168.47.109",
-        "192.168.47.110",
-        "10.0.0.12",
-        "10.0.0.15",
-        "10.0.1.88",
-        "172.16.0.4",
-        "203.0.113.44",
-        "198.51.100.9",
+    user_ip_map = user_ip_map or {}
+    usernames = list(user_ip_map.keys()) or [
+        "jsmith", "mchen", "ppatel", "klee", "rgarcia", "tdavis", "admin1", "admin2",
     ]
-    users = ["jsmith", "mchen", "ppatel", "klee", "admin1", "admin2", "hr_bot", "—"]
+    office_ips = list({ip for ip in user_ip_map.values()}) if user_ip_map else [
+        f"192.168.47.{n}" for n in range(100, 128)
+    ]
+    extra_ips = [
+        "192.168.1.10", "192.168.1.11", "192.168.1.45", "192.168.4.22",
+        "192.168.10.5", "10.0.0.12", "10.0.1.88",
+    ]
+    fake_ips = office_ips + extra_ips
     paths = [
         ("/home", "GET", "Home page"),
         ("/dashboard", "GET", "Dashboard view"),
@@ -144,10 +129,10 @@ def _fake_log_pool() -> list[LogEntry]:
     ]
     entries: list[LogEntry] = []
     base = datetime.now(timezone.utc)
-    for i in range(55):
-        ip = rnd.choice(fake_ips)
+    for i in range(80):
+        user = rnd.choice(usernames)
+        ip = user_ip_map.get(user, rnd.choice(fake_ips))
         path, method, detail = rnd.choice(paths)
-        user = rnd.choice(users)
         ts = (base - timedelta(minutes=rnd.randint(5, 480))).strftime("%Y-%m-%d %H:%M:%S UTC")
         entries.append(
             LogEntry(
@@ -163,16 +148,24 @@ def _fake_log_pool() -> list[LogEntry]:
     return entries
 
 
-def start_cops_and_robbers(perp_ip: str | None = None) -> None:
+def start_cops_and_robbers(
+    user_ip_map: dict[str, str] | None = None,
+    perp_ip: str | None = None,
+) -> None:
     with _lock:
         _state.phase = "active"
+        if user_ip_map:
+            _state.user_ip_map = dict(user_ip_map)
+            _state.office_ip_pool = list({ip for ip in user_ip_map.values()})
         if perp_ip:
             _state.perp_team_ip = perp_ip
+        elif _state.office_ip_pool:
+            _state.perp_team_ip = random.choice(_state.office_ip_pool)
         elif not _state.perp_team_ip:
             _state.perp_team_ip = _pick_perp_ip()
         for sid in list(_state.perp_player_ips.keys()):
             _state.perp_player_ips[sid] = _state.perp_team_ip
-        _state.logs = _fake_log_pool()
+        _state.logs = _fake_log_pool(_state.user_ip_map)
         random.shuffle(_state.logs)
         _state.alerts = [
             "Monitoring active. Review access logs for anomalous activity.",
@@ -191,7 +184,10 @@ def assign_player_ip(session_id: str, team: str) -> str:
     with _lock:
         if team == "perp":
             if not _state.perp_team_ip:
-                _state.perp_team_ip = _pick_perp_ip()
+                if _state.office_ip_pool:
+                    _state.perp_team_ip = random.choice(_state.office_ip_pool)
+                else:
+                    _state.perp_team_ip = _pick_perp_ip()
             _state.perp_player_ips[session_id] = _state.perp_team_ip
             return _state.perp_team_ip
         if session_id not in _state.cop_player_ips:

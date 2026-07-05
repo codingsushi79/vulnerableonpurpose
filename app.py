@@ -8,6 +8,7 @@ NEVER deploy this to the public internet.
 import base64
 import json
 import os
+import random
 import re
 import secrets
 import sqlite3
@@ -32,6 +33,7 @@ from flask import (
 )
 from markupsafe import Markup
 
+import cops_workforce
 import game as game_mode
 import guide_challenges
 import lab_flags
@@ -162,6 +164,7 @@ def init_db(*, empty_users: bool = False):
             department TEXT,
             api_key TEXT,
             secret_note TEXT,
+            last_login_ip TEXT,
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
 
@@ -185,17 +188,18 @@ def init_db(*, empty_users: bool = False):
         )
         db.executemany(
             """
-            INSERT INTO profiles (user_id, email, department, api_key, secret_note)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO profiles (user_id, email, department, api_key, secret_note, last_login_ip)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             [
-                (1, "guest@securecorp.local", "Support", "key_guest_public", "Guest access only."),
+                (1, "guest@securecorp.local", "Support", "key_guest_public", "Guest access only.", None),
                 (
                     2,
                     "analyst@securecorp.local",
                     "SOC",
                     "key_analyst_9b2c",
                     "Monitor login anomalies.",
+                    None,
                 ),
                 (
                     3,
@@ -203,6 +207,7 @@ def init_db(*, empty_users: bool = False):
                     "IT Admin",
                     secrets["idor_flag"],
                     "Master credentials rotated quarterly.",
+                    None,
                 ),
             ],
         )
@@ -538,6 +543,11 @@ def admin_register():
         return render_template("register.html"), 400
 
     db = get_db()
+    last_ip = None
+    if game_mode.COPS_AND_ROBBERS:
+        gs = game_mode.get_state()
+        pool = gs.office_ip_pool or cops_workforce.OFFICE_IP_POOL
+        last_ip = random.choice(pool)
     try:
         cur = db.execute(
             "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
@@ -545,8 +555,8 @@ def admin_register():
         )
         db.execute(
             """
-            INSERT INTO profiles (user_id, email, department, api_key, secret_note)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO profiles (user_id, email, department, api_key, secret_note, last_login_ip)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 cur.lastrowid,
@@ -554,9 +564,12 @@ def admin_register():
                 "Staff",
                 f"key_{username}_auto",
                 "Provisioned via admin registration.",
+                last_ip,
             ),
         )
         db.commit()
+        if game_mode.COPS_AND_ROBBERS and last_ip:
+            game_mode.get_state().user_ip_map[username] = last_ip
     except sqlite3.IntegrityError:
         flash("That username is already taken.", "error")
         return render_template("register.html"), 409
@@ -685,7 +698,8 @@ def api_user(user_id):
     db = get_db()
     row = db.execute(
         """
-        SELECT u.id, u.username, u.role, p.email, p.department, p.api_key, p.secret_note
+        SELECT u.id, u.username, u.role, p.email, p.department, p.api_key, p.secret_note,
+               p.last_login_ip
         FROM users u
         LEFT JOIN profiles p ON p.user_id = u.id
         WHERE u.id = ?
@@ -702,6 +716,7 @@ def api_user(user_id):
         "department": row["department"],
         "api_key": row["api_key"],
         "secret_note": row["secret_note"],
+        "last_login_ip": row["last_login_ip"],
     }
     if row["api_key"] == lab_flags.get("idor_flag"):
         data["api_key_check_label"] = CHECK_LABELS["idor_flag"]
@@ -1042,28 +1057,16 @@ def game_cops_setup():
         return redirect(url_for("game_lobby"))
 
     db = get_db()
-    for i in range(1, count + 1):
-        username = f"admin{i}"
-        email = f"admin{i}@gmail.com"
-        try:
-            cur = db.execute(
-                "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
-                (username, password, "admin"),
-            )
-            db.execute(
-                """
-                INSERT INTO profiles (user_id, email, department, api_key, secret_note)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (cur.lastrowid, email, "IT Security", f"key_{username}", "SOC monitoring account."),
-            )
-        except sqlite3.IntegrityError:
-            pass
-    db.commit()
+    ip_map = cops_workforce.seed_cops_workforce(db, count, password)
+    perp_ip = cops_workforce.pick_perp_ip(ip_map)
     game_mode.get_state().admin_accounts_created = count
     game_mode.get_state().cops_ready = True
-    game_mode.start_cops_and_robbers()
-    flash(f"Created admin1–admin{count} and started log monitoring.", "success")
+    game_mode.start_cops_and_robbers(user_ip_map=ip_map, perp_ip=perp_ip)
+    flash(
+        f"Provisioned {len(cops_workforce.DECOY_EMPLOYEES) + count} employee accounts "
+        f"(including admin1–admin{count}) and started log monitoring.",
+        "success",
+    )
     return redirect(url_for("game_lobby"))
 
 
@@ -1161,7 +1164,7 @@ if __name__ == "__main__":
     else:
         lab_flags.load(use_vault=competitive and lab_flags.VAULT_PATH.exists())
 
-    empty = competitive
+    empty = cops  # time trial keeps default users (guest, analyst, admin)
     if not DB_PATH.exists() or reset:
         init_db(empty_users=empty)
 
