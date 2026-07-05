@@ -1063,7 +1063,7 @@ def game_cops_setup():
     game_mode.get_state().cops_ready = True
     game_mode.start_cops_and_robbers(user_ip_map=ip_map, perp_ip=perp_ip)
     flash(
-        f"Provisioned {len(cops_workforce.DECOY_EMPLOYEES) + count} employee accounts "
+        f"Provisioned {len(cops_workforce.EMPLOYEE_NAMES) + count} employee accounts "
         f"(including admin1–admin{count}) and started log monitoring.",
         "success",
     )
