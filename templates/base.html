@@ -24,7 +24,12 @@
         <a href="{{ url_for('feedback') }}">Feedback</a>
         <a href="{{ url_for('tools_ping') }}">Network Tools</a>
         <a href="{{ url_for('password_reset') }}">Reset Password</a>
-        <a href="{{ url_for('login') }}" class="nav-signin">Sign In</a>
+        {% if logged_in %}
+          <span class="nav-user">{{ identity.username }}</span>
+          <a href="{{ url_for('logout') }}" class="nav-signin">Sign Out</a>
+        {% else %}
+          <a href="{{ url_for('login') }}" class="nav-signin">Sign In</a>
+        {% endif %}
       </nav>
     </div>
   </header>

@@ -86,7 +86,13 @@ def check_tag(key: str) -> str:
 
 @app.context_processor
 def inject_check_labels():
-    return {"check_labels": CHECK_LABELS, "check_tag": check_tag}
+    ident = current_identity()
+    return {
+        "check_labels": CHECK_LABELS,
+        "check_tag": check_tag,
+        "identity": ident,
+        "logged_in": bool(ident.get("username")),
+    }
 
 
 def get_db():
@@ -453,6 +459,7 @@ def search():
 
 
 @app.route("/documents")
+@login_required
 def documents():
     docs = [
         {"name": "backup_flag.txt", "title": "Backup archive"},
@@ -565,6 +572,7 @@ def api_check_user():
 
 
 @app.route("/files")
+@login_required
 def files():
     name = request.args.get("name", "readme.txt")
     if name == "readme.txt":

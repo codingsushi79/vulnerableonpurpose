@@ -114,6 +114,12 @@ a:hover {
   font-weight: 600;
 }
 
+.nav-user {
+  font-size: 0.875rem;
+  color: var(--muted);
+  padding: 0.25rem 0;
+}
+
 .wrap {
   max-width: 960px;
   margin: 0 auto;
