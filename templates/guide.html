@@ -117,6 +117,7 @@ VULNLAB_RESET=1 python app.py</pre>
             <li>Find the POST request — body looks like: <code>username=...&amp;password=...&amp;role=user</code></li>
             <li>Change <code>role=user</code> to <code>role=admin</code></li>
             <li>Forward/resend the request → you land on dashboard as admin</li>
+            <li>Optional: use <strong>Register employee account</strong> on the dashboard to create a cover identity and auto-switch sessions</li>
             <li>On <code>/check</code>, set Bypass method to <code>hidden role</code></li>
           </ol>
         </details>

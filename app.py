@@ -233,6 +233,34 @@ def login_required(view):
     return wrapped
 
 
+def admin_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        ident = current_identity()
+        if not ident.get("username"):
+            flash("Please sign in first.", "error")
+            return redirect(url_for("login"))
+        if ident.get("role") != "admin":
+            flash("Administrator access required.", "error")
+            return redirect(url_for("dashboard"))
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def apply_identity(resp, username: str, role: str):
+    session["username"] = username
+    session["role"] = role
+    resp.set_cookie(
+        "vulnlab_session",
+        encode_session_cookie({"username": username, "role": role}),
+        httponly=False,
+        secure=False,
+        samesite="Lax",
+    )
+    return resp
+
+
 def weak_reset_token(username: str) -> str:
     # Predictable token — md5-ish pattern for lab (not real crypto)
     return base64.urlsafe_b64encode(username.encode()).decode().rstrip("=")
@@ -280,17 +308,8 @@ def login():
         effective_user = row["username"] if row else username or "anonymous"
         effective_role = role if role == "admin" else (row["role"] if row else "user")
 
-        session["username"] = effective_user
-        session["role"] = effective_role
-
         resp = make_response(redirect(url_for("dashboard")))
-        resp.set_cookie(
-            "vulnlab_session",
-            encode_session_cookie({"username": effective_user, "role": effective_role}),
-            httponly=False,
-            secure=False,
-            samesite="Lax",
-        )
+        apply_identity(resp, effective_user, effective_role)
         flash(f"Welcome, {effective_user}.", "success")
         return resp
 
@@ -317,6 +336,55 @@ def dashboard():
             "internal_token": INTERNAL_TOKEN,
         }
     return render_template("dashboard.html", identity=ident, secrets=secrets)
+
+
+@app.route("/admin/register", methods=["GET", "POST"])
+@admin_required
+def admin_register():
+    if request.method == "GET":
+        return render_template("register.html")
+
+    username = request.form.get("username", "").strip()
+    email = request.form.get("email", "").strip()
+    password = request.form.get("password", "")
+    role = request.form.get("role", "user")
+
+    if not username or not email or not password:
+        flash("Username, email, and password are required.", "error")
+        return render_template("register.html"), 400
+
+    if role not in ("user", "admin"):
+        flash("Invalid role.", "error")
+        return render_template("register.html"), 400
+
+    db = get_db()
+    try:
+        cur = db.execute(
+            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+            (username, password, role),
+        )
+        db.execute(
+            """
+            INSERT INTO profiles (user_id, email, department, api_key, secret_note)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                cur.lastrowid,
+                email,
+                "Staff",
+                f"key_{username}_auto",
+                "Provisioned via admin registration.",
+            ),
+        )
+        db.commit()
+    except sqlite3.IntegrityError:
+        flash("That username is already taken.", "error")
+        return render_template("register.html"), 409
+
+    resp = make_response(redirect(url_for("dashboard")))
+    apply_identity(resp, username, role)
+    flash(f"Account created. You are now signed in as {username}.", "success")
+    return resp
 
 
 @app.route("/logout")

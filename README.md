@@ -30,6 +30,7 @@ See **[GUIDE.md](GUIDE.md)** for the walkthrough. Open **http://127.0.0.1:5000/g
 | `/login` | SQL injection, hidden field tampering, user enumeration |
 | Session / cookies | Unsigned base64 cookie override |
 | `/dashboard` | Broken access control → primary flags |
+| `/admin/register` | Admin-only user provisioning (creates account, switches session) |
 | `/documents` | Document archive → leads to file viewer |
 | `/profile` | Hidden field privilege escalation |
 | `/search` | Reflected XSS + SSTI |

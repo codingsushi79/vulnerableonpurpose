@@ -9,6 +9,7 @@
   {% if identity.role == 'admin' %}
     <div class="secrets">
       <p><strong>Administrator resources</strong></p>
+      <p><a href="{{ url_for('admin_register') }}">Register new employee</a></p>
       <div class="finding">
         <span class="check-label">{{ check_tag('admin_password') }}</span>
         <code>{{ secrets.admin_password }}</code>
