@@ -5,12 +5,12 @@
   <header class="guide-header">
     <h1>SecureCorp Lab Guide</h1>
     <p>Follow the phases in order. Each phase tells you <strong>what to do</strong>, <strong>what to collect</strong>, and has expandable <strong>step-by-step hints</strong> if you get stuck.</p>
-    <p class="guide-meta">Hidden pages: <code>/check</code> (submit findings) · <code>/guide</code> (this page)</p>
+    <p class="guide-meta">Hidden pages exist on this lab — you will need to discover them yourself. Expand <strong>Hints</strong> under each phase when stuck.</p>
   </header>
 
   <section class="guide-phase guide-toc">
     <h2>Progress checklist — 19 items</h2>
-    <p>Every labeled value you find maps to a field on <code>/check</code>. Collect these as you go:</p>
+    <p>Every labeled value you find maps to a field on the hidden submission form. Collect these as you go:</p>
     <div class="checklist-grid">
       <div><strong>Auth</strong> Username · Bypass method · Admin password · Dashboard flag · Internal token · Cookie role</div>
       <div><strong>Web attacks</strong> XSS canary · Stored XSS (yes) · IDOR · LFI · CMDi · SSRF · Backup flag · Reset flag · SSTI · Profile flag · Report SQLi</div>
@@ -31,20 +31,22 @@ VULNLAB_RESET=1 python app.py</pre>
   <!-- PHASE 1 -->
   <section class="guide-phase">
     <h2>Phase 1 — Reconnaissance</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Map every page, API, and leaked file before attacking.</p>
+    <p class="guide-goal"><strong>Goal:</strong> Map the application and find information the developers did not intend to expose.</p>
+
+    <div class="guide-tools"><strong>Tools:</strong> Browser · View Page Source · curl or browser address bar</div>
 
     <ol class="guide-steps">
-      <li>Click through every link on the homepage and navigation bar. Write down each URL.</li>
-      <li>On the sign-in page, right-click → <strong>View Page Source</strong>. Look for comments and hidden fields.</li>
-      <li>Visit <code>/robots.txt</code> in your browser — note every disallowed path.</li>
-      <li>Try <code>/api/status</code> and read the JSON response.</li>
-      <li>Open <strong>Company Documents</strong> and follow links to the file viewer.</li>
+      <li>Explore every page linked from the homepage and navigation. Keep a list of URLs and forms.</li>
+      <li>Inspect HTML source on key pages — look for comments, hidden fields, and hard-coded hints.</li>
+      <li>Check whether the site exposes any standard discovery files that list hidden paths.</li>
+      <li>Probe for JSON or API endpoints that return structured data.</li>
+      <li>Follow any internal document or file features and note how filenames are passed to the server.</li>
     </ol>
 
     <div class="guide-collect">
-      <strong>Collect now:</strong> Backup config flag · XSS canary flag (both in backup file)
+      <strong>Collect now:</strong> Backup config flag · XSS canary flag (both appear in leaked configuration)
     </div>
-    <p class="guide-done"><strong>Done when:</strong> You have read <code>/backup/config.bak</code> and saved both labeled values from it.</p>
+    <p class="guide-done"><strong>Done when:</strong> You have found a leaked config file with at least two labeled <code>VULN{...}</code> values and noted paths to revisit later.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 1</summary>
@@ -54,7 +56,7 @@ VULNLAB_RESET=1 python app.py</pre>
           <ol>
             <li>Go to <code>http://127.0.0.1:5000/robots.txt</code></li>
             <li>Read the <code>Disallow:</code> lines — these are paths the site owner tried to hide</li>
-            <li>Note <code>/backup/</code>, <code>/internal/</code>, <code>/sys/</code>, <code>/api/user/</code>, <code>/api/reports</code></li>
+            <li>Note <code>/backup/</code>, <code>/backup/config.bak</code>, <code>/internal/</code>, <code>/sys/</code>, <code>/api/user/</code>, <code>/api/reports</code></li>
           </ol>
         </details>
         <details>
@@ -88,19 +90,21 @@ VULNLAB_RESET=1 python app.py</pre>
   <!-- PHASE 2 -->
   <section class="guide-phase">
     <h2>Phase 2 — Login &amp; admin access</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Reach the administrator dashboard and copy all labeled secrets.</p>
+    <p class="guide-goal"><strong>Goal:</strong> Bypass or abuse authentication and reach administrator-only content.</p>
+
+    <div class="guide-tools"><strong>Tools:</strong> Burp Suite or OWASP ZAP · DevTools → Network tab · DevTools → Application → Cookies</div>
 
     <ol class="guide-steps">
-      <li>Sign in with wrong passwords for <code>admin</code> vs <code>notreal</code> — compare error messages.</li>
-      <li>Intercept the login POST — find the hidden <code>role</code> field.</li>
-      <li>Get admin dashboard access (three methods below — pick one).</li>
-      <li>Open <strong>My Dashboard</strong> as admin and copy every labeled value.</li>
+      <li>Try logging in with valid-looking and invalid usernames. Compare error messages carefully.</li>
+      <li>Capture the login request in an intercept proxy. Inspect every parameter — including ones not visible on the form.</li>
+      <li>Attempt at least one bypass technique (request tampering, injection, or cookie editing).</li>
+      <li>Once elevated, open the dashboard and record every labeled secret shown.</li>
     </ol>
 
     <div class="guide-collect">
-      <strong>Collect now:</strong> Admin password · Dashboard flag · Internal token · Cookie role (<code>admin</code>) · Username · Bypass method
+      <strong>Collect now:</strong> Admin password · Dashboard flag · Internal token · Cookie role · Username · Bypass method
     </div>
-    <p class="guide-done"><strong>Done when:</strong> Dashboard shows "Administrator resources" with four labeled items.</p>
+    <p class="guide-done"><strong>Done when:</strong> The dashboard shows administrator resources with labeled values you can copy.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 2</summary>
@@ -152,17 +156,21 @@ VULNLAB_RESET=1 python app.py</pre>
   <!-- PHASE 3 -->
   <section class="guide-phase">
     <h2>Phase 3 — XSS (cross-site scripting)</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Prove reflected and stored XSS. XSS canary flag is from Phase 1 backup file.</p>
+    <p class="guide-goal"><strong>Goal:</strong> Demonstrate both reflected and stored XSS somewhere on the portal.</p>
+
+    <div class="guide-tools"><strong>Tools:</strong> Browser · harmless <code>&lt;script&gt;alert(...)&lt;/script&gt;</code> payload</div>
 
     <ol class="guide-steps">
-      <li>Directory search — submit HTML/script in the search box, see if it executes.</li>
-      <li>Feedback — post a script tag, reload page, confirm it runs.</li>
-      <li>Mark Stored XSS as <strong>Yes</strong> on <code>/check</code>.</li>
+      <li>Find a page that echoes your input back in the HTML response — test with a script payload.</li>
+      <li>Find a page that saves your input and displays it to others later — test the same way.</li>
+      <li>Confirm both payloads actually execute in the browser.</li>
+      <li>Remember the XSS canary label from your recon phase for submission later.</li>
     </ol>
 
     <div class="guide-collect">
-      <strong>Collect now:</strong> XSS canary flag (backup config) · Stored XSS = yes
+      <strong>Collect now:</strong> XSS canary flag · Stored XSS = yes (on submission form)
     </div>
+    <p class="guide-done"><strong>Done when:</strong> You have triggered both reflected and stored XSS at least once.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 3</summary>
@@ -191,14 +199,18 @@ VULNLAB_RESET=1 python app.py</pre>
   <!-- PHASE 4 SSTI -->
   <section class="guide-phase">
     <h2>Phase 4 — SSTI (server-side template injection)</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Inject template syntax in the directory search to leak a server-side flag.</p>
+    <p class="guide-goal"><strong>Goal:</strong> Prove the server evaluates template syntax in user input and leak the labeled flag.</p>
+
+    <div class="guide-tools"><strong>Tools:</strong> Browser address bar · curl (optional)</div>
 
     <ol class="guide-steps">
-      <li>Confirm template evaluation with <code>{{7*7}}</code> — should show <code>49</code>.</li>
-      <li>Leak the flag variable with <code>{{ssti_flag}}</code>.</li>
+      <li>Return to the searchable page from Phase 3. Try input that would be evaluated server-side if templating is in use.</li>
+      <li>Confirm evaluation with a simple arithmetic expression before attempting to leak secrets.</li>
+      <li>Extract the labeled SSTI flag from the response.</li>
     </ol>
 
     <div class="guide-collect"><strong>Collect now:</strong> SSTI flag</div>
+    <p class="guide-done"><strong>Done when:</strong> You have a labeled SSTI flag value saved.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 4</summary>
@@ -219,14 +231,18 @@ VULNLAB_RESET=1 python app.py</pre>
   <!-- PHASE 5 IDOR -->
   <section class="guide-phase">
     <h2>Phase 5 — IDOR</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Read other users' profiles by changing the ID in the URL.</p>
+    <p class="guide-goal"><strong>Goal:</strong> Access another user's data by manipulating an identifier in a request.</p>
+
+    <div class="guide-tools"><strong>Tools:</strong> Browser · curl · sequential ID enumeration (1, 2, 3…)</div>
 
     <ol class="guide-steps">
-      <li>Visit <code>/api/user/1</code>, then <code>/2</code>, then <code>/3</code>.</li>
-      <li>Find the admin profile and copy the labeled <code>api_key</code>.</li>
+      <li>From recon, find an API that returns user profiles keyed by a numeric ID.</li>
+      <li>Check whether the server verifies you are allowed to view each record.</li>
+      <li>Walk through IDs until you reach an account with sensitive fields.</li>
     </ol>
 
     <div class="guide-collect"><strong>Collect now:</strong> IDOR flag</div>
+    <p class="guide-done"><strong>Done when:</strong> You have the labeled IDOR flag from another user's profile.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 5</summary>
@@ -247,15 +263,19 @@ VULNLAB_RESET=1 python app.py</pre>
   <!-- PHASE 6 REPORT SQLi -->
   <section class="guide-phase">
     <h2>Phase 6 — Report API SQL injection</h2>
-    <p class="guide-goal"><strong>Goal:</strong> SQL-inject the department filter on the hidden reports API.</p>
+    <p class="guide-goal"><strong>Goal:</strong> Break out of a SQL query through a filter parameter on a hidden API.</p>
+
+    <div class="guide-tools"><strong>Tools:</strong> Browser · curl · URL encoding awareness</div>
 
     <ol class="guide-steps">
-      <li>Find <code>/api/reports</code> (listed in robots.txt).</li>
-      <li>Try normal dept values, then injection to return all rows.</li>
-      <li>When 3+ users returned, the response includes the report flag.</li>
+      <li>Locate the reports API from your recon notes.</li>
+      <li>Send normal filter values first to understand the response shape.</li>
+      <li>Inject into the filter parameter to return more rows than intended.</li>
+      <li>Read the labeled flag that appears when the query returns all users.</li>
     </ol>
 
     <div class="guide-collect"><strong>Collect now:</strong> Report SQLi flag</div>
+    <p class="guide-done"><strong>Done when:</strong> The API response includes the report SQLi label.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 6</summary>
@@ -276,14 +296,18 @@ VULNLAB_RESET=1 python app.py</pre>
   <!-- PHASE 7 LFI -->
   <section class="guide-phase">
     <h2>Phase 7 — Local file read</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Read protected files via the document viewer.</p>
+    <p class="guide-goal"><strong>Goal:</strong> Read archived files through the document viewer parameter.</p>
+
+    <div class="guide-tools"><strong>Tools:</strong> Browser · curl · document links from Phase 1</div>
 
     <ol class="guide-steps">
-      <li>Go to <code>/files?name=backup_flag.txt</code> (linked from Documents page).</li>
-      <li>Copy the labeled LFI flag from the response.</li>
+      <li>Use the file viewer discovered during recon (linked from the documents section).</li>
+      <li>Request filenames shown in the archive list, then try variations if needed.</li>
+      <li>Copy the labeled LFI flag and read any deployment notes you find — they matter later.</li>
     </ol>
 
     <div class="guide-collect"><strong>Collect now:</strong> LFI flag</div>
+    <p class="guide-done"><strong>Done when:</strong> You have the LFI flag and have skimmed deployment-related notes.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 7</summary>
@@ -302,15 +326,18 @@ VULNLAB_RESET=1 python app.py</pre>
   <!-- PHASE 8 CMDi -->
   <section class="guide-phase">
     <h2>Phase 8 — Command injection</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Run extra commands through the network ping tool.</p>
+    <p class="guide-goal"><strong>Goal:</strong> Append OS commands to input processed by a network diagnostic tool.</p>
+
+    <div class="guide-tools"><strong>Tools:</strong> Browser form · curl with <code>-X POST -d</code> · shell metacharacters (<code>;</code> <code>|</code> <code>&amp;</code>)</div>
 
     <ol class="guide-steps">
-      <li>Go to <strong>Network Tools</strong> (<code>/tools/ping</code>).</li>
-      <li>Enter a hostname with a shell metacharacter appended.</li>
-      <li>Read the labeled flag in the debug output.</li>
+      <li>Open the IT network diagnostics feature from the navigation.</li>
+      <li>Submit a valid-looking host value first, then append command separators and a simple command.</li>
+      <li>Find the labeled flag in the tool output.</li>
     </ol>
 
     <div class="guide-collect"><strong>Collect now:</strong> Command injection flag</div>
+    <p class="guide-done"><strong>Done when:</strong> Output shows both your injected command result and the labeled flag.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 8</summary>
@@ -330,15 +357,19 @@ VULNLAB_RESET=1 python app.py</pre>
   <!-- PHASE 9 SSRF -->
   <section class="guide-phase">
     <h2>Phase 9 — SSRF</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Make the server fetch an internal URL you cannot reach directly.</p>
+    <p class="guide-goal"><strong>Goal:</strong> Trick the server into fetching an internal URL on your behalf.</p>
+
+    <div class="guide-tools"><strong>Tools:</strong> URL preview / fetch tool · curl · internal URL from leaked config</div>
 
     <ol class="guide-steps">
-      <li>Get <code>INTERNAL_HEALTH_URL</code> from the backup config (Phase 1).</li>
-      <li>Open URL Preview tool (link on Network Tools page).</li>
-      <li>Paste the internal URL — read <code>ssrf_flag</code> from the JSON response.</li>
+      <li>Find the internal health URL from configuration you leaked in Phase 1.</li>
+      <li>Locate the server-side URL fetch feature (linked from network tools).</li>
+      <li>Submit the internal URL so the <strong>server</strong> requests it — not your browser directly.</li>
+      <li>Save the SSRF flag and any host console token returned in the same response.</li>
     </ol>
 
-    <div class="guide-collect"><strong>Collect now:</strong> SSRF flag · host console token (same response)</div>
+    <div class="guide-collect"><strong>Collect now:</strong> SSRF flag · host console token</div>
+    <p class="guide-done"><strong>Done when:</strong> You have both the SSRF label and a console access token saved.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 9</summary>
@@ -359,15 +390,18 @@ VULNLAB_RESET=1 python app.py</pre>
   <!-- PHASE 10 RESET -->
   <section class="guide-phase">
     <h2>Phase 10 — Password reset</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Forge a valid reset token without email access.</p>
+    <p class="guide-goal"><strong>Goal:</strong> Approve a password reset by forging a predictable token.</p>
+
+    <div class="guide-tools"><strong>Tools:</strong> Browser · Python shell (optional, for encoding) · curl (optional)</div>
 
     <ol class="guide-steps">
-      <li>Generate a reset link for username <code>admin</code>.</li>
-      <li>Notice the token pattern — it's predictable.</li>
-      <li>Visit the reset URL and copy the labeled flag.</li>
+      <li>Use the password reset page to generate a link for a known username.</li>
+      <li>Analyze how the token is built — is it random or derived from the username?</li>
+      <li>Forge a valid token and visit the reset URL to retrieve the labeled flag.</li>
     </ol>
 
     <div class="guide-collect"><strong>Collect now:</strong> Password reset flag</div>
+    <p class="guide-done"><strong>Done when:</strong> Reset page confirms success and shows the labeled flag.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 10</summary>
@@ -388,15 +422,18 @@ VULNLAB_RESET=1 python app.py</pre>
   <!-- PHASE 11 PROFILE -->
   <section class="guide-phase">
     <h2>Phase 11 — Profile escalation</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Tamper with a hidden field on the profile form to escalate access.</p>
+    <p class="guide-goal"><strong>Goal:</strong> Escalate privileges by tampering with a hidden profile form field.</p>
+
+    <div class="guide-tools"><strong>Tools:</strong> Burp Suite or OWASP ZAP · DevTools → Network tab · valid login session</div>
 
     <ol class="guide-steps">
-      <li>Log in (any account).</li>
-      <li>Go to <strong>My Dashboard</strong> then edit profile (or visit <code>/profile</code> while logged in).</li>
-      <li>Intercept the save request and change the hidden <code>access_level</code> field.</li>
+      <li>Sign in with any account and open the profile editor from the dashboard.</li>
+      <li>Intercept the profile save request in your proxy.</li>
+      <li>Look for hidden parameters the UI does not show and try elevating them.</li>
     </ol>
 
     <div class="guide-collect"><strong>Collect now:</strong> Profile escalation flag</div>
+    <p class="guide-done"><strong>Done when:</strong> The profile page confirms escalation and displays the labeled flag.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 11</summary>
@@ -418,16 +455,18 @@ VULNLAB_RESET=1 python app.py</pre>
   <!-- PHASE 12 HOST -->
   <section class="guide-phase">
     <h2>Phase 12 — Host compromise (shell + root)</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Get a web shell on the server and read both host flags.</p>
+    <p class="guide-goal"><strong>Goal:</strong> Use the console token to get a shell, then escalate to root on the host.</p>
+
+    <div class="guide-tools"><strong>Tools:</strong> Browser · host console token from Phase 9 · built-in shell commands (<code>ls</code> <code>cat</code> <code>sudo</code>)</div>
 
     <ol class="guide-steps">
-      <li>Use <code>host_console_token</code> from Phase 9.</li>
-      <li>Open <code>/sys/console?token=YOUR_TOKEN</code>.</li>
-      <li>Run <code>help</code>, then <code>cat home/www-data/user_flag.txt</code>.</li>
-      <li>Run <code>sudo cat root/flag.txt</code> for root flag.</li>
+      <li>Use the console token from the SSRF response to access the hidden system console.</li>
+      <li>Run <code>help</code> and explore the filesystem with basic shell commands.</li>
+      <li>Read the user-level proof file, then find a way to read root's flag.</li>
     </ol>
 
     <div class="guide-collect"><strong>Collect now:</strong> Host shell flag · Host root flag</div>
+    <p class="guide-done"><strong>Done when:</strong> You have both host flags saved.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 12</summary>
@@ -449,14 +488,18 @@ VULNLAB_RESET=1 python app.py</pre>
   <!-- PHASE 13 SUBMIT -->
   <section class="guide-phase">
     <h2>Phase 13 — Submit everything</h2>
-    <p class="guide-goal"><strong>Goal:</strong> Score 19/19 on the hidden submission form.</p>
+    <p class="guide-goal"><strong>Goal:</strong> Enter all 19 labeled values on the hidden submission form and score full marks.</p>
+
+    <div class="guide-tools"><strong>Tools:</strong> Browser · your collected notes from every prior phase</div>
 
     <ol class="guide-steps">
-      <li>Go to <code>/check</code> (not linked anywhere on the site).</li>
-      <li>Enter every labeled value under its matching field name.</li>
-      <li>Stored XSS → <strong>Yes</strong>. Cookie role → <code>admin</code>.</li>
-      <li>Submit and verify 19/19 complete.</li>
+      <li>Find the submission form — it is not linked from the main site.</li>
+      <li>Match each label you collected to the same field name on the form.</li>
+      <li>For boolean fields (Stored XSS), submit <strong>Yes</strong> only if you confirmed the attack worked.</li>
+      <li>Submit and review the pass/fail breakdown.</li>
     </ol>
+
+    <p class="guide-done"><strong>Done when:</strong> The form reports 19/19 complete.</p>
 
     <details class="guide-hints">
       <summary>Step-by-step hints — Phase 13</summary>

@@ -607,6 +607,15 @@ code {
   margin-bottom: 0.75rem;
 }
 
+.guide-tools {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.75rem;
+}
+
 .guide-done {
   font-size: 0.9rem;
   color: var(--muted);

@@ -697,6 +697,7 @@ def password_reset():
 def robots():
     body = """User-agent: *
 Disallow: /backup/
+Disallow: /backup/config.bak
 Disallow: /internal/
 Disallow: /sys/
 Disallow: /api/user/
