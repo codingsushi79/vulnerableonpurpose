@@ -107,11 +107,84 @@ def sample_workforce_names() -> list[tuple[str, str, str]]:
     return random.sample(EMPLOYEE_NAMES, n)
 
 
+def create_cop_admin(db: sqlite3.Connection, slot: int, password: str) -> str:
+    """Create a single cop admin account (admin1 … admin4) with a chosen password."""
+    username = f"admin{slot}"
+    if db.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+        raise ValueError(f"{username} already exists")
+    cur = db.execute(
+        "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+        (username, password, "admin"),
+    )
+    ip = random.choice(OFFICE_IP_POOL)
+    db.execute(
+        """
+        INSERT INTO profiles (user_id, email, department, api_key, secret_note, last_login_ip)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        (
+            cur.lastrowid,
+            f"{username}@securecorp.local",
+            "IT Security",
+            f"key_{username}",
+            f"Admin {slot} — cop team account.",
+            ip,
+        ),
+    )
+    db.commit()
+    return username
+
+
+def seed_decoy_workforce(db: sqlite3.Connection) -> None:
+    """Add random decoy employees (no admin accounts)."""
+    roster: list[tuple[str, str, str, str, str, str]] = []
+    for username, email, dept, first, last in _unique_identities(sample_workforce_names()):
+        display = f"{first} {last}"
+        roster.append((username, email, dept, "user", DECOY_PASSWORD, display))
+
+    random.shuffle(roster)
+    ip_map = _assign_office_ips([r[0] for r in roster])
+
+    for username, email, dept, role, password, display_name in roster:
+        cur = db.execute(
+            "INSERT INTO users (username, password, role) VALUES (?, ?, ?)",
+            (username, password, role),
+        )
+        db.execute(
+            """
+            INSERT INTO profiles (user_id, email, department, api_key, secret_note, last_login_ip)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                cur.lastrowid,
+                email,
+                dept,
+                f"key_{username}",
+                f"{display_name} — standard employee account.",
+                ip_map[username],
+            ),
+        )
+
+    db.commit()
+
+
+def user_ip_map_from_db(db: sqlite3.Connection) -> dict[str, str]:
+    rows = db.execute(
+        """
+        SELECT u.username, p.last_login_ip
+        FROM users u
+        JOIN profiles p ON p.user_id = u.id
+        """
+    ).fetchall()
+    return {row["username"]: row["last_login_ip"] for row in rows}
+
+
 def seed_cops_workforce(
     db: sqlite3.Connection,
     admin_count: int,
     admin_password: str,
 ) -> dict[str, str]:
+    """Legacy bulk seed — prefer create_cop_admin + seed_decoy_workforce."""
     roster: list[tuple[str, str, str, str, str, str]] = []
     for username, email, dept, first, last in _unique_identities(sample_workforce_names()):
         display = f"{first} {last}"

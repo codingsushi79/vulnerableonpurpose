@@ -18,6 +18,7 @@ TIME_TRIAL = False
 
 PERP_WIN_SCORE = 13
 ADMIN_BAN_ATTEMPTS = 2
+MAX_COP_ADMINS = 4
 
 _lock = threading.Lock()
 
@@ -60,6 +61,9 @@ class GameState:
     alerts: list[str] = field(default_factory=list)
     logs: list[LogEntry] = field(default_factory=list)
     admin_accounts_created: int = 0
+    cop_accounts: dict[str, str] = field(default_factory=dict)  # session_id -> adminN
+    cop_slots_used: set[int] = field(default_factory=set)
+    decoys_seeded: bool = False
     user_ip_map: dict[str, str] = field(default_factory=dict)
     office_ip_pool: list[str] = field(default_factory=list)
 
@@ -86,6 +90,50 @@ def reset_state() -> None:
     global _state
     with _lock:
         _state = GameState()
+
+
+def reserve_cop_slot(session_id: str) -> int | None:
+    """Return slot 1–4 for a new or returning cop session. None if team is full."""
+    with _lock:
+        if session_id in _state.cop_accounts:
+            username = _state.cop_accounts[session_id]
+            return int(username.removeprefix("admin"))
+        for slot in range(1, MAX_COP_ADMINS + 1):
+            if slot not in _state.cop_slots_used:
+                return slot
+        return None
+
+
+def confirm_cop_account(session_id: str, slot: int) -> str:
+    username = f"admin{slot}"
+    with _lock:
+        _state.cop_slots_used.add(slot)
+        _state.cop_accounts[session_id] = username
+        _state.admin_accounts_created = len(_state.cop_slots_used)
+    return username
+
+
+def cop_username_for_session(session_id: str) -> str | None:
+    with _lock:
+        return _state.cop_accounts.get(session_id)
+
+
+    with _lock:
+        return sorted(_state.cop_accounts.values(), key=lambda u: int(u.removeprefix("admin")))
+
+
+def cop_admin_count() -> int:
+    with _lock:
+        return len(_state.cop_slots_used)
+
+
+def mark_decoys_seeded() -> None:
+    with _lock:
+        _state.decoys_seeded = True
+
+
+def decoys_seeded() -> bool:
+    return _state.decoys_seeded
 
 
 def _now() -> str:
@@ -488,6 +536,12 @@ def public_status() -> dict:
         "win_message": s.win_message,
         "ban_attempts_remaining": max(0, ADMIN_BAN_ATTEMPTS - s.ban_attempts_used),
         "perp_win_threshold": PERP_WIN_SCORE,
+        "cop_admin_count": len(s.cop_slots_used),
+        "cop_admin_usernames": sorted(
+            {f"admin{i}" for i in s.cop_slots_used},
+            key=lambda u: int(u.removeprefix("admin")),
+        ),
+        "cops_ready": s.cops_ready,
         "trial_elapsed": trial_elapsed(),
         "trial_par_seconds": trial_par_seconds() if TIME_TRIAL else None,
         "trial_penalty_seconds": s.trial_penalty_seconds,

@@ -35,7 +35,7 @@ VULNLAB_RESET=1 COPS_AND_ROBBERS=1 python app.py
 VULNLAB_RESET=1 TIME_TRIAL=1 python app.py
 ```
 
-Open **http://127.0.0.1:5000/game** to pick teams and start. In Cops & Robbers, blue team creates `admin1@securecorp.local`, `admin2@securecorp.local`, … accounts before monitoring begins (no preset users). Time trial keeps the default `guest`, `analyst`, and `admin` accounts.
+Open **http://127.0.0.1:5000/game** to pick teams and start. In Cops & Robbers, each blue-team player joins with their own password and is assigned `admin1`, `admin2`, … (up to 4). After everyone is in, one admin starts monitoring. Time trial keeps the default `guest`, `analyst`, and `admin` accounts.
 
 In competitive modes, `/guide` solutions are disabled and hints require verified in-app challenges to unlock. Flags are randomized on each `VULNLAB_RESET` and stored in `.lab_flags.json` (not readable via LFI).
 

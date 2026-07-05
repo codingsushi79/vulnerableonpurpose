@@ -28,19 +28,24 @@
       <p class="game-intro">Admins watch logs and ban the attacker (2 guesses). Robbers race to score {{ status.perp_win_threshold }}+ on <code>/check</code>. Some log traffic is decoy.</p>
 
       {% if team == 'cop' %}
-        <h2>Blue team — setup</h2>
-        <p>Create admin accounts (admin1, admin2, …). Each cop should use a different account.</p>
-        <form method="post" action="{{ url_for('game_cops_setup') }}" class="game-setup-form">
-          <label for="admin_count">Number of admin accounts</label>
-          <select id="admin_count" name="admin_count">
-            {% for n in range(1, 5) %}
-              <option value="{{ n }}">{{ n }}</option>
-            {% endfor %}
-          </select>
-          <label for="password">Shared initial password for all admin accounts</label>
-          <input id="password" name="password" type="password" required>
-          <button type="submit">Create accounts &amp; start monitoring</button>
-        </form>
+        <h2>Blue team</h2>
+        {% if cop_admin_username %}
+          <div class="cop-account-card">
+            <p>Your admin account: <strong><code>{{ cop_admin_username }}</code></strong></p>
+            <p>Log in at <a href="{{ url_for('login') }}">/login</a> with that username and the password you chose. Only you know that password.</p>
+          </div>
+          {% if status.cop_admin_usernames|length > 1 %}
+            <p class="game-meta">Admins joined: {{ status.cop_admin_usernames|join(', ') }}</p>
+          {% endif %}
+          {% if not status.cops_ready %}
+            <form method="post" action="{{ url_for('game_cops_setup') }}" class="game-setup-form">
+              <button type="submit">Start monitoring</button>
+            </form>
+            <p class="game-hint">Up to 4 admins can join. Share this page so others can pick Blue team before you start.</p>
+          {% endif %}
+        {% else %}
+          <p>Something went wrong — rejoin blue team below.</p>
+        {% endif %}
       {% elif team == 'perp' %}
         <h2>Red team — waiting</h2>
         <p>You're on the attacker team{% if player_name %} as <strong>{{ player_name }}</strong>{% endif %}.</p>
@@ -48,9 +53,11 @@
       {% else %}
         <h2>Choose your team</h2>
         <div class="team-grid">
-          <form method="post" action="{{ url_for('game_join') }}">
+          <form method="post" action="{{ url_for('game_join') }}" class="team-form-cop">
             <input type="hidden" name="team" value="cop">
             <label>Display name <input name="player_name" placeholder="Admin lead" required></label>
+            <label>Your admin password <input name="password" type="password" required autocomplete="new-password"></label>
+            <p class="form-hint">You'll be assigned <code>admin1</code>, <code>admin2</code>, … (up to 4). Only you will know your password.</p>
             <button type="submit" class="btn-team btn-cop">Join Blue Team (Cops)</button>
           </form>
           <form method="post" action="{{ url_for('game_join') }}">

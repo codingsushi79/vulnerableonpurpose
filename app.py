@@ -1042,12 +1042,15 @@ def game_lobby():
         game_mode.reset_state()
         session.pop("game_team", None)
         session.pop("game_player", None)
+        session.pop("cop_admin_username", None)
         return redirect(url_for("game_lobby"))
     return render_template(
         "game_lobby.html",
         status=game_mode.public_status(),
         team=session.get("game_team"),
         player_name=session.get("game_player"),
+        cop_admin_username=session.get("cop_admin_username")
+        or game_mode.cop_username_for_session(session.get("game_session_id", "")),
     )
 
 
@@ -1060,11 +1063,45 @@ def game_join():
     if team not in ("cop", "perp"):
         flash("Pick a team.", "error")
         return redirect(url_for("game_lobby"))
+
+    session.setdefault("game_session_id", secrets.token_hex(8))
     session["game_team"] = team
     session["game_player"] = name
-    session.setdefault("game_session_id", secrets.token_hex(8))
     game_mode.assign_player_ip(session["game_session_id"], team)
-    flash(f"Joined {'Blue' if team == 'cop' else 'Red'} team as {name}.", "success")
+
+    if team == "cop":
+        if game_mode.get_state().phase != "lobby":
+            flash("Game already in progress — log in with your admin account.", "info")
+            return redirect(url_for("game_lobby"))
+
+        sid = session["game_session_id"]
+        existing = game_mode.cop_username_for_session(sid)
+        if existing:
+            session["cop_admin_username"] = existing
+            flash(f"You're already {existing}. Log in at /login.", "info")
+            return redirect(url_for("game_lobby"))
+
+        password = request.form.get("password", "")
+        if not password:
+            flash("Choose a password for your admin account.", "error")
+            return redirect(url_for("game_lobby"))
+
+        slot = game_mode.reserve_cop_slot(sid)
+        if slot is None:
+            flash("Blue team is full (4 admins max).", "error")
+            return redirect(url_for("game_lobby"))
+
+        db = get_db()
+        username = cops_workforce.create_cop_admin(db, slot, password)
+        game_mode.confirm_cop_account(sid, slot)
+        session["cop_admin_username"] = username
+        flash(
+            f"Assigned {username}. Log in with that username and the password you just chose.",
+            "success",
+        )
+        return redirect(url_for("game_lobby"))
+
+    flash(f"Joined Red team as {name}.", "success")
     return redirect(url_for("game_lobby"))
 
 
@@ -1073,16 +1110,20 @@ def game_cops_setup():
     if not game_mode.COPS_AND_ROBBERS or session.get("game_team") != "cop":
         flash("Cop team setup only.", "error")
         return redirect(url_for("game_lobby"))
-    count = min(4, max(1, int(request.form.get("admin_count", 1))))
-    password = request.form.get("password", "")
-    if not password:
-        flash("Password required.", "error")
+    if game_mode.get_state().phase != "lobby":
+        flash("Monitoring already started.", "info")
+        return redirect(url_for("game_lobby"))
+    if game_mode.cop_admin_count() < 1:
+        flash("At least one admin must join blue team first.", "error")
         return redirect(url_for("game_lobby"))
 
     db = get_db()
-    ip_map = cops_workforce.seed_cops_workforce(db, count, password)
+    if not game_mode.decoys_seeded():
+        cops_workforce.seed_decoy_workforce(db)
+        game_mode.mark_decoys_seeded()
+
+    ip_map = cops_workforce.user_ip_map_from_db(db)
     perp_ip = cops_workforce.pick_perp_ip(ip_map)
-    game_mode.get_state().admin_accounts_created = count
     game_mode.get_state().cops_ready = True
     game_mode.start_cops_and_robbers(user_ip_map=ip_map, perp_ip=perp_ip)
     flash("Log monitoring started.", "success")

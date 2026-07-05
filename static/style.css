@@ -717,6 +717,26 @@ code {
   gap: 1rem;
 }
 
+.cop-account-card {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.form-hint,
+.game-hint,
+.game-meta {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 0.5rem;
+}
+
+.game-meta {
+  margin-bottom: 1rem;
+}
+
 @media (max-width: 640px) {
   .team-grid {
     grid-template-columns: 1fr;
